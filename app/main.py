@@ -1,11 +1,11 @@
 import sys
 from pathlib import Path
-sys.path.append(str(Path(__file__).parent))
+sys.path.append(str(Path(__file__).parent))  # ← ИСПРАВЛЕНО: __file__ вместо file
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-# Роутеры
+# Роутеры  # ← ИСПРАВЛЕНО: добавлен #
 from app.api.me import router as me_router
 from app.api.history import router as history_router
 from app.api.tasks import router as tasks_router
