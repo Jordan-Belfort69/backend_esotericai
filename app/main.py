@@ -21,7 +21,10 @@ app = FastAPI(title="EsotericAI Backend v3")
 # ✅ ИСПРАВЛЕНО: Убраны пробелы в конце URL
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://unstrange-karson-unorganisable.ngrok-free.dev"],
+    allow_origins=[
+        "https://jordan-belfort69.github.io",  # Домен вашего фронтенда
+        "https://web-production-4d81b.up.railway.app"  # Домен вашего бэкенда
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
