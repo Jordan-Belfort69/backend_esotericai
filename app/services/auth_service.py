@@ -50,6 +50,9 @@ def validate_init_data(init_data: str) -> TelegramUser:
 
     print("DEBUG BOT_TOKEN prefix:", BOT_TOKEN[:10])
 
+    print("DEBUG BOT_TOKEN prefix:", BOT_TOKEN[:10])
+    print("DEBUG has_sha256:", "hashlib.sha256(" in open(__file__, "r", encoding="utf-8").read())
+
     # ✅ Вычисляем хеш
     computed_hash = hmac.new(
         key=secret_key,
