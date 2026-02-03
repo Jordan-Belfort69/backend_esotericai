@@ -48,6 +48,8 @@ def validate_init_data(init_data: str) -> TelegramUser:
         digestmod=hashlib.sha256,
     ).digest()
 
+    print("DEBUG BOT_TOKEN prefix:", BOT_TOKEN[:10])
+
     # ✅ Вычисляем хеш
     computed_hash = hmac.new(
         key=secret_key,
