@@ -18,20 +18,21 @@ from app.api.tarot import router as tarot_router
 
 app = FastAPI(title="EsotericAI Backend v3")
 
-# ✅ ИСПРАВЛЕНО: Добавлен домен Telegram для CORS
+# ✅ CORS Middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://jordan-belfort69.github.io",
         "https://web-production-4d81b.up.railway.app",
-        "https://web.telegram.org"  # ← Добавлен домен Telegram
+        "https://web.telegram.org",
+        "https://t.me"
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Подключение API
+# Подключение роутеров
 app.include_router(me_router)
 app.include_router(history_router)
 app.include_router(tasks_router)

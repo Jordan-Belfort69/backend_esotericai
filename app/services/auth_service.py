@@ -21,54 +21,51 @@ def _get_connection():
 def validate_init_data(init_data: str) -> TelegramUser:
     """
     Валидирует initData от Telegram и возвращает данные пользователя.
-    Поддерживает новый формат с параметром 'signature'.
+    Правильная обработка двойного URL-кодирования.
     """
-    # Парсим параметры
-    params = urllib.parse.parse_qs(init_data)
-    
-    # Извлекаем hash или signature (в зависимости от версии Telegram)
-    hash_value = params.get("hash", [None])[0]
-    signature = params.get("signature", [None])[0]
-    
-    if not hash_value and not signature:
-        raise ValueError("Missing hash or signature parameter")
+    # ✅ ПАРСИМ ВРУЧНУЮ, чтобы сохранить кодирование
+    params = {}
+    for pair in init_data.split("&"):
+        if "=" in pair:
+            key, value = pair.split("=", 1)
+            params[key] = value
 
-    # Формируем данные для проверки подписи
+    # ✅ Извлекаем хеш (используем 'hash', а не 'signature')
+    hash_value = params.pop("hash", None)
+    if not hash_value:
+        raise ValueError("Missing hash parameter")
+
+    # ✅ Формируем строку для проверки (без декодирования!)
     check_data = []
     for key in sorted(params.keys()):
-        if key in ("hash", "signature"):
-            continue
-        for value in params[key]:
-            check_data.append(f"{key}={value}")
-
+        check_data.append(f"{key}={params[key]}")
+    
     data_check_string = "\n".join(check_data)
 
-    # Генерируем секретный ключ
+    # ✅ Генерируем секретный ключ
     secret_key = hmac.new(
         key=b"WebAppData",
         msg=BOT_TOKEN.encode(),
         digestmod=hashlib.sha256
     ).digest()
 
-    # Вычисляем хеш
-    expected_hash = hmac.new(
+    # ✅ Вычисляем хеш
+    computed_hash = hmac.new(
         key=secret_key,
         msg=data_check_string.encode(),
         digestmod=hashlib.sha256
     ).hexdigest()
 
-    # Проверяем подпись
-    if signature:
-        # Для новых версий Telegram с параметром 'signature'
-        if not hmac.compare_digest(expected_hash, signature):
-            raise ValueError("Invalid signature")
-    else:
-        # Для старых версий Telegram с параметром 'hash'
-        if not hmac.compare_digest(expected_hash, hash_value):
-            raise ValueError("Invalid hash signature")
+    # ✅ Проверяем подпись
+    if not hmac.compare_digest(computed_hash, hash_value):
+        print(f"❌ Hash mismatch!")
+        print(f"Computed: {computed_hash}")
+        print(f"Expected: {hash_value}")
+        print(f"Data: {data_check_string[:100]}...")
+        raise ValueError("Invalid signature")
 
-    # Извлекаем данные пользователя
-    user_data_str = params.get("user", [None])[0]
+    # ✅ Парсим user (только здесь декодируем)
+    user_data_str = params.get("user")
     if not user_data_str:
         raise ValueError("Missing user parameter")
 
@@ -93,13 +90,13 @@ def ensure_user_exists(user_id: int, first_name: str, username: str | None = Non
     try:
         cur = conn.cursor()
         cur.execute("""
-            INSERT INTO users (
-                user_id, first_name, username, created_at, updated_at,
-                messages_balance
-            ) VALUES (?, ?, ?, ?, ?, 0)
-            ON CONFLICT(user_id) DO UPDATE SET
-                username = excluded.username,
-                updated_at = excluded.updated_at
+        INSERT INTO users (
+            user_id, first_name, username, created_at, updated_at,
+            messages_balance
+        ) VALUES (?, ?, ?, ?, ?, 0)
+        ON CONFLICT(user_id) DO UPDATE SET
+            username = excluded.username,
+            updated_at = excluded.updated_at
         """, (
             user_id,
             first_name,
