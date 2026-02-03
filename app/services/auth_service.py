@@ -6,6 +6,7 @@ import sqlite3
 from datetime import datetime
 from core.config import BOT_TOKEN, DB_PATH
 
+
 class TelegramUser(NamedTuple):
     user_id: int
     first_name: str
@@ -15,12 +16,14 @@ class TelegramUser(NamedTuple):
     allows_write_to_pm: bool
     photo_url: Optional[str] = None
 
+
 def _get_connection():
     return sqlite3.connect(DB_PATH)
 
+
 def validate_init_data(init_data: str) -> TelegramUser:
     """
-    Валидирует initData от Telegram (правильный алгоритм)
+    Валидирует initData от Telegram Mini Apps (официальный алгоритм)
     """
     # ✅ ПАРСИМ ВРУЧНУЮ, чтобы сохранить URL-кодирование
     params = {}
@@ -38,14 +41,18 @@ def validate_init_data(init_data: str) -> TelegramUser:
     sorted_params = sorted(params.items(), key=lambda x: x[0])
     data_check_string = "\n".join([f"{k}={v}" for k, v in sorted_params])
 
-    # ✅ Генерируем секретный ключ (ПРАВИЛЬНЫЙ АЛГОРИТМ)
-    secret_key = hashlib.sha256(BOT_TOKEN.encode()).digest()
+    # ✅ ✅ ✅ ПРАВИЛЬНЫЙ СЕКРЕТНЫЙ КЛЮЧ (официальный алгоритм Mini Apps)
+    secret_key = hmac.new(
+        key=b"WebAppData",
+        msg=BOT_TOKEN.encode(),
+        digestmod=hashlib.sha256,
+    ).digest()
 
     # ✅ Вычисляем хеш
     computed_hash = hmac.new(
         key=secret_key,
         msg=data_check_string.encode(),
-        digestmod=hashlib.sha256
+        digestmod=hashlib.sha256,
     ).hexdigest()
 
     # ✅ Проверяем подпись
@@ -73,6 +80,7 @@ def validate_init_data(init_data: str) -> TelegramUser:
         allows_write_to_pm=user_data.get("allows_write_to_pm", False),
         photo_url=user_data.get("photo_url")
     )
+
 
 def ensure_user_exists(user_id: int, first_name: str, username: str | None = None) -> None:
     """
