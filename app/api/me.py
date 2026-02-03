@@ -19,7 +19,7 @@ def get_me(user_id: CurrentUserDep):
             detail="User profile not found"
         )
     
-    # ✅ УБРАНЫ ПРОБЕЛЫ В КЛЮЧАХ!
+    # ✅ УБРАНЫ ПРОБЕЛЫ В КЛЮЧАХ!!
     return {
         "user_id": user_id,
         "name": profile["name"],

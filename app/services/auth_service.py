@@ -25,7 +25,7 @@ def validate_init_data(init_data: str) -> TelegramUser:
     """
     Валидирует initData от Telegram Mini Apps (официальный алгоритм)
     """
-    # ✅ ПАРСИМ ВРУЧНУЮ, чтобы сохранить URL-кодирование
+    # ✅ ПАРСИМ ВРУЧНУЮ, чтобы сохранить URL-кодирование.
     params = {}
     for pair in init_data.split("&"):
         if "=" in pair:
