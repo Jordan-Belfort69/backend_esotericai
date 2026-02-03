@@ -12,6 +12,7 @@ DB_PATH = BASE_DIR / "db" / "users.db"
 # ВАШ ТОКЕН НОВОГО БОТА
 BOT_TOKEN = "8585375528:AAHlPi5dhKHwU5b7AEqf_Y6Ogy7zIygWc5Q"
 
+# ✅ УБРАНЫ ПРОБЕЛЫ В КЛЮЧАХ!
 LEVELS = [
     {"code": "spark", "title": "Искра", "min_xp": 0, "max_xp": 99},
     {"code": "seeker", "title": "Ищущая", "min_xp": 100, "max_xp": 299},

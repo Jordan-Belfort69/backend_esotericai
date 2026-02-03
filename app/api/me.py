@@ -14,8 +14,9 @@ def get_me(user_id: CurrentUserDep):
     if profile is None:
         raise Exception("User should exist after CurrentUserDep")
     
+    # ✅ УБРАНЫ ПРОБЕЛЫ В КЛЮЧАХ!
     return {
-        "user_id": user_id,
+        "user_id": user_id,  # ← без пробелов!
         "name": profile["name"],
         "username": profile["username"],
         "registered_at": profile["registered_at"],

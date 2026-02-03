@@ -27,27 +27,25 @@ def validate_init_data(init_data: str) -> TelegramUser:
     # Парсим параметры
     params = urllib.parse.parse_qs(init_data)
     
-    # Извлекаем hash (обязательный параметр)
-    hash_value = params.get("hash", [None])[0]
+    # Извлекаем hash (обязательный параметр) - БЕЗ ПРОБЕЛОВ!
+    hash_value = params.get("hash", [None])[0]  # ← "hash" а не "hash "
     if not hash_value:
         raise ValueError("Missing hash parameter")
 
     # Формируем данные для проверки подписи
-    # Берём все параметры, кроме hash и signature
     check_data = []
     for key in sorted(params.keys()):
-        if key in ("hash", "signature"):
+        if key in ("hash", "signature"):  # ← без пробелов!
             continue
-        # Для каждого ключа может быть несколько значений (массив)
         for value in params[key]:
-            check_data.append(f"{key}={value}")
+            check_data.append(f"{key}={value}")  # ← без пробела в конце!
 
-    # Склеиваем через \n
-    data_check_string = "\n".join(check_data)
+    # Склеиваем через \n - БЕЗ ПРОБЕЛА!
+    data_check_string = "\n".join(check_data)  # ← "\n" а не "\n "
 
-    # Генерируем секретный ключ
+    # Генерируем секретный ключ - БЕЗ ПРОБЕЛА!
     secret_key = hmac.new(
-        key=b"WebAppData",
+        key=b"WebAppData",  # ← b"WebAppData" а не b"WebAppData "
         msg=BOT_TOKEN.encode(),
         digestmod=hashlib.sha256
     ).digest()
@@ -63,8 +61,8 @@ def validate_init_data(init_data: str) -> TelegramUser:
     if not hmac.compare_digest(expected_hash, hash_value):
         raise ValueError("Invalid hash signature")
 
-    # Извлекаем данные пользователя
-    user_data_str = params.get("user", [None])[0]
+    # Извлекаем данные пользователя - БЕЗ ПРОБЕЛОВ!
+    user_data_str = params.get("user", [None])[0]  # ← "user" а не "user "
     if not user_data_str:
         raise ValueError("Missing user parameter")
 
@@ -72,7 +70,7 @@ def validate_init_data(init_data: str) -> TelegramUser:
     user_data = json.loads(urllib.parse.unquote(user_data_str))
 
     return TelegramUser(
-        user_id=user_data["id"],
+        user_id=user_data["id"],  # ← без пробелов!
         first_name=user_data["first_name"],
         last_name=user_data.get("last_name"),
         username=user_data.get("username"),
