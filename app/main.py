@@ -1,6 +1,6 @@
 import sys
 from pathlib import Path
-sys.path.append(str(Path(__file__).parent))
+sys.path.append(str(Path(__file__).parent))  # __file__ вместо file
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
