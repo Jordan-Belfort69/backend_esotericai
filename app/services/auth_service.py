@@ -41,6 +41,9 @@ def validate_init_data(init_data: str) -> TelegramUser:
     sorted_params = sorted(params.items(), key=lambda x: x[0])
     data_check_string = "\n".join([f"{k}={v}" for k, v in sorted_params])
 
+    print("DEBUG params keys:", list(params.keys()))
+    print("DEBUG data_check_string FULL:", data_check_string)
+
     # ✅ ✅ ✅ ПРАВИЛЬНЫЙ СЕКРЕТНЫЙ КЛЮЧ (официальный алгоритм Mini Apps)
     secret_key = hmac.new(
         key=b"WebAppData",
