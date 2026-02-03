@@ -43,11 +43,8 @@ def validate_init_data(init_data: str) -> TelegramUser:
     data_check_string = "\n".join(check_data)
 
     # ✅ Генерируем секретный ключ
-    secret_key = hmac.new(
-        key=b"WebAppData",
-        msg=BOT_TOKEN.encode(),
-        digestmod=hashlib.sha256
-    ).digest()
+    # ✅ ПРАВИЛЬНЫЙ КОД
+    secret_key = hashlib.sha256(BOT_TOKEN.encode()).digest()
 
     # ✅ Вычисляем хеш
     computed_hash = hmac.new(
