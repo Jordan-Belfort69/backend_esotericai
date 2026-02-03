@@ -16,7 +16,6 @@ class TelegramUser(NamedTuple):
     photo_url: Optional[str] = None
 
 def _get_connection():
-    """Возвращает соединение с БД."""
     return sqlite3.connect(DB_PATH)
 
 def validate_init_data(init_data: str) -> TelegramUser:
@@ -27,25 +26,26 @@ def validate_init_data(init_data: str) -> TelegramUser:
     # Парсим параметры
     params = urllib.parse.parse_qs(init_data)
     
-    # Извлекаем hash (обязательный параметр) - БЕЗ ПРОБЕЛОВ!
-    hash_value = params.get("hash", [None])[0]  # ← "hash" а не "hash "
-    if not hash_value:
-        raise ValueError("Missing hash parameter")
+    # Извлекаем hash или signature (в зависимости от версии Telegram)
+    hash_value = params.get("hash", [None])[0]
+    signature = params.get("signature", [None])[0]
+    
+    if not hash_value and not signature:
+        raise ValueError("Missing hash or signature parameter")
 
     # Формируем данные для проверки подписи
     check_data = []
     for key in sorted(params.keys()):
-        if key in ("hash", "signature"):  # ← без пробелов!
+        if key in ("hash", "signature"):
             continue
         for value in params[key]:
-            check_data.append(f"{key}={value}")  # ← без пробела в конце!
+            check_data.append(f"{key}={value}")
 
-    # Склеиваем через \n - БЕЗ ПРОБЕЛА!
-    data_check_string = "\n".join(check_data)  # ← "\n" а не "\n "
+    data_check_string = "\n".join(check_data)
 
-    # Генерируем секретный ключ - БЕЗ ПРОБЕЛА!
+    # Генерируем секретный ключ
     secret_key = hmac.new(
-        key=b"WebAppData",  # ← b"WebAppData" а не b"WebAppData "
+        key=b"WebAppData",
         msg=BOT_TOKEN.encode(),
         digestmod=hashlib.sha256
     ).digest()
@@ -57,12 +57,18 @@ def validate_init_data(init_data: str) -> TelegramUser:
         digestmod=hashlib.sha256
     ).hexdigest()
 
-    # Сравниваем хеши
-    if not hmac.compare_digest(expected_hash, hash_value):
-        raise ValueError("Invalid hash signature")
+    # Проверяем подпись
+    if signature:
+        # Для новых версий Telegram с параметром 'signature'
+        if not hmac.compare_digest(expected_hash, signature):
+            raise ValueError("Invalid signature")
+    else:
+        # Для старых версий Telegram с параметром 'hash'
+        if not hmac.compare_digest(expected_hash, hash_value):
+            raise ValueError("Invalid hash signature")
 
-    # Извлекаем данные пользователя - БЕЗ ПРОБЕЛОВ!
-    user_data_str = params.get("user", [None])[0]  # ← "user" а не "user "
+    # Извлекаем данные пользователя
+    user_data_str = params.get("user", [None])[0]
     if not user_data_str:
         raise ValueError("Missing user parameter")
 
@@ -70,7 +76,7 @@ def validate_init_data(init_data: str) -> TelegramUser:
     user_data = json.loads(urllib.parse.unquote(user_data_str))
 
     return TelegramUser(
-        user_id=user_data["id"],  # ← без пробелов!
+        user_id=user_data["id"],
         first_name=user_data["first_name"],
         last_name=user_data.get("last_name"),
         username=user_data.get("username"),
