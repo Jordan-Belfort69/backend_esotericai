@@ -1,11 +1,11 @@
 import sys
 from pathlib import Path
-sys.path.append(str(Path(__file__).parent))  # ← ИСПРАВЛЕНО: __file__ вместо file
+sys.path.append(str(Path(__file__).parent))
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-# Роутеры  # ← ИСПРАВЛЕНО: добавлен #
+# Роутеры
 from app.api.me import router as me_router
 from app.api.history import router as history_router
 from app.api.tasks import router as tasks_router
@@ -18,12 +18,11 @@ from app.api.tarot import router as tarot_router
 
 app = FastAPI(title="EsotericAI Backend v3")
 
-# ✅ ИСПРАВЛЕНО: Убраны пробелы в конце URL
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://jordan-belfort69.github.io",  # Домен вашего фронтенда
-        "https://web-production-4d81b.up.railway.app"  # Домен вашего бэкенда
+        "https://jordan-belfort69.github.io",
+        "https://web-production-4d81b.up.railway.app"
     ],
     allow_credentials=True,
     allow_methods=["*"],
