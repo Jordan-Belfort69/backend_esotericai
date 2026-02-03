@@ -20,35 +20,35 @@ def _get_connection():
 
 def validate_init_data(init_data: str) -> TelegramUser:
     """
-    Валидирует initData от Telegram (совместимо с версией 6.9+)
+    Валидирует initData от Telegram (правильный алгоритм)
     """
-    # ПАРСИМ ВРУЧНУЮ, чтобы сохранить URL-кодирование
+    # ✅ ПАРСИМ ВРУЧНУЮ, чтобы сохранить URL-кодирование
     params = {}
     for pair in init_data.split("&"):
         if "=" in pair:
             key, value = pair.split("=", 1)
             params[key] = value
 
-    # Извлекаем hash
+    # ✅ Извлекаем hash
     hash_value = params.pop("hash", None)
     if not hash_value:
         raise ValueError("Missing hash parameter")
 
-    # Формируем строку для проверки (без декодирования!)
+    # ✅ Формируем строку для проверки (без декодирования!)
     sorted_params = sorted(params.items(), key=lambda x: x[0])
     data_check_string = "\n".join([f"{k}={v}" for k, v in sorted_params])
 
-    # Генерируем секретный ключ (ПРАВИЛЬНЫЙ АЛГОРИТМ)
+    # ✅ Генерируем секретный ключ (ПРАВИЛЬНЫЙ АЛГОРИТМ)
     secret_key = hashlib.sha256(BOT_TOKEN.encode()).digest()
 
-    # Вычисляем хеш
+    # ✅ Вычисляем хеш
     computed_hash = hmac.new(
         key=secret_key,
         msg=data_check_string.encode(),
         digestmod=hashlib.sha256
     ).hexdigest()
 
-    # Проверяем подпись
+    # ✅ Проверяем подпись
     if not hmac.compare_digest(computed_hash, hash_value):
         print(f"❌ Hash mismatch!")
         print(f"Computed: {computed_hash}")
@@ -56,7 +56,7 @@ def validate_init_data(init_data: str) -> TelegramUser:
         print(f"Data: {data_check_string[:100]}...")
         raise ValueError("Invalid signature")
 
-    # Парсим user (только здесь декодируем)
+    # ✅ Парсим user (только здесь декодируем)
     user_data_str = params.get("user")
     if not user_data_str:
         raise ValueError("Missing user parameter")

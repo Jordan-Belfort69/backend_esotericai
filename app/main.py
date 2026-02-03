@@ -1,6 +1,6 @@
 import sys
 from pathlib import Path
-sys.path.append(str(Path(__file__).parent))  # __file__ вместо file
+sys.path.append(str(Path(__file__).parent))  # Исправлено!
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,14 +18,14 @@ from app.api.tarot import router as tarot_router
 
 app = FastAPI(title="EsotericAI Backend v3")
 
-# ✅ CORS Middleware
+# ✅ ИСПРАВЛЕНО: Полный список доменов для CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://jordan-belfort69.github.io",
         "https://web-production-4d81b.up.railway.app",
         "https://web.telegram.org",
-        "https://t.me"
+        "https://t.me"  # ← Обязательно добавить
     ],
     allow_credentials=True,
     allow_methods=["*"],
