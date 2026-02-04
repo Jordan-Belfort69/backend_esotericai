@@ -1,4 +1,3 @@
-# ===== ИСПРАВЛЕННЫЙ КОД =====
 import sqlite3
 from datetime import datetime
 from typing import Optional, Dict, Any
@@ -39,7 +38,7 @@ def _get_user_row(user_id: int) -> Optional[Dict[str, Any]]:
         cur = conn.cursor()
         cur.execute("""
         SELECT user_id, username, first_name, created_at, updated_at,
-        messages_balance, is_banned
+               messages_balance, is_banned
         FROM users WHERE user_id = ?
         """, (user_id,))
         row = cur.fetchone()
@@ -51,8 +50,9 @@ def get_user_profile(user_id: int) -> Optional[Dict[str, Any]]:
     user = _get_user_row(user_id)
     if user is None:
         return None
+    
     created_at = user.get("created_at") or datetime.utcnow().isoformat()
-
+    
     # Подсчитываем друзей
     conn = _get_connection()
     try:
@@ -71,7 +71,7 @@ def get_user_profile(user_id: int) -> Optional[Dict[str, Any]]:
         xp = int(xp_row["xp"]) if xp_row and xp_row["xp"] is not None else 0
     finally:
         conn.close()
-
+    
     # Определяем уровень
     current_level = LEVELS[0]
     for lvl in LEVELS:
@@ -84,10 +84,10 @@ def get_user_profile(user_id: int) -> Optional[Dict[str, Any]]:
         if min_xp <= xp <= max_xp:
             current_level = lvl
             break
-
+    
     # Баланс: используем messages_balance
     balance = int(user.get("messages_balance") or 0)
-
+    
     return {
         "name": user.get("first_name") or "",
         "username": user.get("username") or "",

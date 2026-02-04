@@ -1,4 +1,3 @@
-# ===== ИСПРАВЛЕННЫЙ КОД =====
 from fastapi import APIRouter, Depends, HTTPException, status
 from app.deps.current_user import CurrentUserDep
 from app.services.user_service import get_user_profile
@@ -17,7 +16,6 @@ def get_me(user_id: CurrentUserDep):
             detail="User profile not found"
         )
     
-    # ✅ ИСПРАВЛЕНО: Убраны пробелы в ключах!
     return {
         "user_id": user_id,
         "name": profile["name"],
