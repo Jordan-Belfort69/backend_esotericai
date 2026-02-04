@@ -1,13 +1,12 @@
-# ===== ИСПРАВЛЕННЫЙ КОД С НЕОБХОДИМЫМ ИМПОРТОМ =====
+# ===== ИСПРАВЛЕННЫЙ КОД С ТОЧНЫМИ УСЛОВИЯМИ =====
 import hashlib
 import hmac
-from urllib.parse import parse_qsl, unquote  # ✅ ДОБАВЛЕН unquote!
+from urllib.parse import parse_qsl  # ✅ ТОЛЬКО parse_qsl, БЕЗ unquote
 from typing import Optional, NamedTuple
 import sqlite3
 from datetime import datetime
 import json
 from core.config import BOT_TOKEN, DB_PATH
-
 
 class TelegramUser(NamedTuple):
     user_id: int
@@ -18,10 +17,8 @@ class TelegramUser(NamedTuple):
     allows_write_to_pm: bool
     photo_url: Optional[str] = None
 
-
 def _get_connection():
     return sqlite3.connect(DB_PATH)
-
 
 def validate_init_data(init_data: str) -> TelegramUser:
     """
@@ -29,8 +26,10 @@ def validate_init_data(init_data: str) -> TelegramUser:
     """
     print(f"🔍 [auth_service] Получен initData (первые 100 символов): {init_data[:100]}...")
     
-    # ✅ ТОЧНО ПО УСЛОВИЯМ БЭКЕНДА
+    # ✅ ТОЧНО ПО УСЛОВИЮ БЭКЕНДА: Используем parse_qsl
     params = dict(parse_qsl(init_data, keep_blank_values=True))
+    
+    # ✅ ТОЧНО ПО УСЛОВИЮ БЭКЕНДА: Ищем хеш
     hash_value = params.pop("hash", None)
     if not hash_value:
         raise ValueError("Missing hash parameter")
@@ -66,13 +65,13 @@ def validate_init_data(init_data: str) -> TelegramUser:
     
     print(f"✅ [auth_service] Хеш валидирован успешно!")
     
-    # ✅ Парсим user данные
+    # ✅ Получаем данные пользователя
     user_data_str = params.get("user")
     if not user_data_str:
         raise ValueError("Missing user parameter")
     
-    # ✅ ТЕПЕРЬ РАБОТАЕТ: Декодируем URL → JSON → объект
-    user_data = json.loads(unquote(user_data_str))
+    # ✅ ТОЧНО ПО УСЛОВИЮ: БЕЗ unquote! parse_qsl уже декодировал
+    user_data = json.loads(user_data_str)
     
     print(f"✅ [auth_service] Пользователь: {user_data.get('first_name')} (id={user_data.get('id')})")
     
@@ -85,7 +84,6 @@ def validate_init_data(init_data: str) -> TelegramUser:
         allows_write_to_pm=user_data.get("allows_write_to_pm", False),
         photo_url=user_data.get("photo_url")
     )
-
 
 def ensure_user_exists(user_id: int, first_name: str, username: str | None = None) -> None:
     """
