@@ -20,40 +20,38 @@ def _get_connection():
     return sqlite3.connect(DB_PATH)
 
 def validate_init_data(init_data: str) -> TelegramUser:
-    print(f"🔍 [BACKEND] Получен initData (первые 100 символов): {init_data[:100]}...")
-    print(f"🔍 [BACKEND] Длина initData: {len(init_data)}")
-    
     params = {}
     for pair in init_data.split("&"):
         if "=" in pair:
             key, value = pair.split("=", 1)
             params[key] = value
     
-    # ✅ ПРОВЕРЯЕМ ОБА ВАРИАНТА:
+    # ✅ ИСПРАВЛЕНИЕ: Проверяем оба варианта
     hash_value = params.pop("hash", None)
-    
-    # Если нет "hash" - пробуем "signature" (Login Widget)
     if not hash_value:
         hash_value = params.pop("signature", None)
         if not hash_value:
             raise ValueError("Missing hash/signature parameter")
     
-    # ✅ ОСТАЛЬНОЙ КОД БЕЗ ИЗМЕНЕНИЙ...
+    # ✅ Формируем строку для проверки (без декодирования!)
     sorted_params = sorted(params.items(), key=lambda x: x[0])
     data_check_string = "\n".join([f"{k}={v}" for k, v in sorted_params])
     
+    # ✅ СЕКРЕТНЫЙ КЛЮЧ (официальный алгоритм Mini Apps)
     secret_key = hmac.new(
         key=b"WebAppData",
         msg=BOT_TOKEN.encode(),
         digestmod=hashlib.sha256,
     ).digest()
     
+    # ✅ Вычисляем хеш
     computed_hash = hmac.new(
         key=secret_key,
         msg=data_check_string.encode(),
         digestmod=hashlib.sha256,
     ).hexdigest()
     
+    # ✅ Проверяем подпись
     if not hmac.compare_digest(computed_hash, hash_value):
         print(f"❌ Hash mismatch!")
         print(f"Computed: {computed_hash}")
