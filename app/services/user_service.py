@@ -14,14 +14,14 @@ def ensure_user_exists(user_id: int, first_name: str, username: str | None = Non
     try:
         cur = conn.cursor()
         cur.execute("""
-        INSERT INTO users (
-            user_id, first_name, username, created_at, updated_at,
-            messages_balance, photo_url
-        ) VALUES (?, ?, ?, ?, ?, 0, ?)
-        ON CONFLICT(user_id) DO UPDATE SET
-            username = excluded.username,
-            updated_at = excluded.updated_at,
-            photo_url = excluded.photo_url
+            INSERT INTO users (
+                user_id, first_name, username, created_at, updated_at,
+                messages_balance, photo_url
+            ) VALUES (?, ?, ?, ?, ?, 0, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                username = excluded.username,
+                updated_at = excluded.updated_at,
+                photo_url = excluded.photo_url
         """, (
             user_id,
             first_name,
@@ -39,9 +39,9 @@ def _get_user_row(user_id: int) -> Optional[Dict[str, Any]]:
     try:
         cur = conn.cursor()
         cur.execute("""
-        SELECT user_id, username, first_name, created_at, updated_at,
-               messages_balance, is_banned, photo_url
-        FROM users WHERE user_id = ?
+            SELECT user_id, username, first_name, created_at, updated_at,
+                   messages_balance, is_banned, photo_url
+            FROM users WHERE user_id = ?
         """, (user_id,))
         row = cur.fetchone()
         return dict(row) if row else None
@@ -54,7 +54,7 @@ def get_user_profile(user_id: int) -> Optional[Dict[str, Any]]:
         return None
     
     created_at = user.get("created_at") or datetime.utcnow().isoformat()
-    
+
     # Подсчитываем друзей
     conn = _get_connection()
     try:
@@ -73,7 +73,7 @@ def get_user_profile(user_id: int) -> Optional[Dict[str, Any]]:
         xp = int(xp_row["xp"]) if xp_row and xp_row["xp"] is not None else 0
     finally:
         conn.close()
-    
+
     # Определяем уровень
     current_level = LEVELS[0]
     for lvl in LEVELS:
@@ -86,10 +86,10 @@ def get_user_profile(user_id: int) -> Optional[Dict[str, Any]]:
         if min_xp <= xp <= max_xp:
             current_level = lvl
             break
-    
-    # Баланс: используем messages_balance
+
+    # Баланс: используем messages_balance, но возвращаем как credits_balance
     balance = int(user.get("messages_balance") or 0)
-    
+
     return {
         "name": user.get("first_name") or "",
         "username": user.get("username") or "",

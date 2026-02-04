@@ -1,5 +1,3 @@
-# app/services/user_balance_service.py
-
 import sqlite3
 from pathlib import Path
 from typing import Optional
@@ -57,7 +55,7 @@ def add_user_xp(user_id: int, amount: int) -> None:
             INSERT INTO user_xp (user_id, xp)
             VALUES (?, ?)
             ON CONFLICT(user_id) DO UPDATE SET
-            xp = xp + excluded.xp
+                xp = xp + excluded.xp
         """, (user_id, amount))
         conn.commit()
     finally:

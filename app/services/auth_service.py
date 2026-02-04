@@ -24,9 +24,10 @@ def validate_init_data(init_data: str) -> TelegramUser:
     Валидация initData из Telegram Mini App
     """
     print(f"🔍 [auth_service] Получен initData (первые 100 символов): {init_data[:100]}...")
+    
     # Парсим параметры БЕЗ unquote
     params = dict(parse_qsl(init_data, keep_blank_values=True))
-
+    
     # Извлекаем хеш и удаляем его из параметров
     hash_value = params.pop("hash", None)
 
@@ -71,10 +72,10 @@ def validate_init_data(init_data: str) -> TelegramUser:
 
     # Декодируем данные пользователя БЕЗ unquote
     user_data = json.loads(user_data_str)
-    
+
     # Генерируем URL аватарки, если photo_url отсутствует
     photo_url = None
-    if "photo_url" in user_data:
+    if "photo_url" in user_data and user_data["photo_url"]:
         photo_url = user_data["photo_url"]
     else:
         # Используем Dicebear API для генерации аватарки
@@ -108,14 +109,14 @@ def ensure_user_exists(user_id: int, first_name: str, username: str | None = Non
     try:
         cur = conn.cursor()
         cur.execute("""
-        INSERT INTO users (
-            user_id, first_name, username, created_at, updated_at,
-            messages_balance, photo_url
-        ) VALUES (?, ?, ?, ?, ?, 0, ?)
-        ON CONFLICT(user_id) DO UPDATE SET
-            username = excluded.username,
-            updated_at = excluded.updated_at,
-            photo_url = excluded.photo_url
+            INSERT INTO users (
+                user_id, first_name, username, created_at, updated_at,
+                messages_balance, photo_url
+            ) VALUES (?, ?, ?, ?, ?, 0, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                username = excluded.username,
+                updated_at = excluded.updated_at,
+                photo_url = excluded.photo_url
         """, (
             user_id,
             first_name,
