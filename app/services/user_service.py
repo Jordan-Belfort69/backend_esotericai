@@ -8,7 +8,7 @@ def _get_connection() -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     return conn
 
-def ensure_user_exists(user_id: int, first_name: str, username: str | None = None) -> None:
+def ensure_user_exists(user_id: int, first_name: str, username: str | None = None, photo_url: str | None = None) -> None:
     """Создаёт пользователя, если его нет."""
     conn = _get_connection()
     try:
@@ -16,17 +16,19 @@ def ensure_user_exists(user_id: int, first_name: str, username: str | None = Non
         cur.execute("""
         INSERT INTO users (
             user_id, first_name, username, created_at, updated_at,
-            messages_balance
-        ) VALUES (?, ?, ?, ?, ?, 0)
+            messages_balance, photo_url
+        ) VALUES (?, ?, ?, ?, ?, 0, ?)
         ON CONFLICT(user_id) DO UPDATE SET
             username = excluded.username,
-            updated_at = excluded.updated_at
+            updated_at = excluded.updated_at,
+            photo_url = excluded.photo_url
         """, (
             user_id,
             first_name,
             username,
             datetime.utcnow().isoformat(),
-            datetime.utcnow().isoformat()
+            datetime.utcnow().isoformat(),
+            photo_url
         ))
         conn.commit()
     finally:
@@ -38,7 +40,7 @@ def _get_user_row(user_id: int) -> Optional[Dict[str, Any]]:
         cur = conn.cursor()
         cur.execute("""
         SELECT user_id, username, first_name, created_at, updated_at,
-               messages_balance, is_banned
+               messages_balance, is_banned, photo_url
         FROM users WHERE user_id = ?
         """, (user_id,))
         row = cur.fetchone()
@@ -91,6 +93,7 @@ def get_user_profile(user_id: int) -> Optional[Dict[str, Any]]:
     return {
         "name": user.get("first_name") or "",
         "username": user.get("username") or "",
+        "photo_url": user.get("photo_url"),
         "registered_at": created_at,
         "status_code": current_level["code"],
         "status_title": current_level["title"],
