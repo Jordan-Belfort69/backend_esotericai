@@ -73,14 +73,22 @@ def validate_init_data(init_data: str) -> TelegramUser:
     # Декодируем данные пользователя БЕЗ unquote
     user_data = json.loads(user_data_str)
     
-    print(f"✅ [auth_service] Пользователь: {user_data.get('first_name')} (id={user_data.get('id')})")
+    # Генерируем URL аватарки, если photo_url отсутствует
+    photo_url = None
+    if "photo_url" in user_data:
+        photo_url = user_data["photo_url"]
+    else:
+        # Используем Dicebear API для генерации аватарки
+        photo_url = f"https://api.dicebear.com/7.x/avataaars/svg?seed={user_data['id']}"
+    
+    print(f"✅ [auth_service] Пользователь: {user_data.get('first_name')} (id={user_data.get('id')}, photo_url={photo_url})")
     
     # Создаем пользователя в БД
     ensure_user_exists(
         user_id=user_data["id"],
         first_name=user_data["first_name"],
         username=user_data.get("username"),
-        photo_url=user_data.get("photo_url")
+        photo_url=photo_url
     )
     
     return TelegramUser(
@@ -90,7 +98,7 @@ def validate_init_data(init_data: str) -> TelegramUser:
         username=user_data.get("username"),
         language_code=user_data["language_code"],
         allows_write_to_pm=user_data.get("allows_write_to_pm", False),
-        photo_url=user_data.get("photo_url")
+        photo_url=photo_url
     )
 
 def ensure_user_exists(user_id: int, first_name: str, username: str | None = None, photo_url: str | None = None) -> None:
