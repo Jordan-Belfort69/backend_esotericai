@@ -24,37 +24,36 @@ def validate_init_data(init_data: str) -> TelegramUser:
     Валидация initData из Telegram Mini App
     """
     print(f"🔍 [auth_service] Получен initData (первые 100 символов): {init_data[:100]}...")
-    
     # Парсим параметры БЕЗ unquote
     params = dict(parse_qsl(init_data, keep_blank_values=True))
-    
+
     # Извлекаем хеш и удаляем его из параметров
     hash_value = params.pop("hash", None)
-    
+
     if not hash_value:
         raise ValueError("Missing hash parameter")
-    
+
     print(f"🔍 [auth_service] Hash из запроса: {hash_value[:20]}...")
     print(f"🔍 [auth_service] Параметры после удаления hash: {list(params.keys())}")
-    
+
     # Собираем данные для проверки (сортируем по ключам)
     sorted_params = sorted(params.items(), key=lambda x: x[0])
     data_check_string = "\n".join([f"{k}={v}" for k, v in sorted_params])
-    
+
     # Генерируем секретный ключ
     secret_key = hmac.new(
         key=b"WebAppData",
         msg=BOT_TOKEN.encode(),
         digestmod=hashlib.sha256,
     ).digest()
-    
+
     # Вычисляем хеш
     computed_hash = hmac.new(
         key=secret_key,
         msg=data_check_string.encode(),
         digestmod=hashlib.sha256,
     ).hexdigest()
-    
+
     # Сравниваем хеши
     if not hmac.compare_digest(computed_hash, hash_value):
         print(f"❌ [auth_service] Hash mismatch!")
@@ -62,14 +61,14 @@ def validate_init_data(init_data: str) -> TelegramUser:
         print(f"❌ [auth_service] Expected: {hash_value}")
         print(f"❌ [auth_service] Data check string (first 200 chars): {data_check_string[:200]}")
         raise ValueError("Invalid signature")
-    
+
     print(f"✅ [auth_service] Хеш валидирован успешно!")
-    
+
     # Получаем данные пользователя
     user_data_str = params.get("user")
     if not user_data_str:
         raise ValueError("Missing user parameter")
-    
+
     # Декодируем данные пользователя БЕЗ unquote
     user_data = json.loads(user_data_str)
     
@@ -80,9 +79,9 @@ def validate_init_data(init_data: str) -> TelegramUser:
     else:
         # Используем Dicebear API для генерации аватарки
         photo_url = f"https://api.dicebear.com/7.x/avataaars/svg?seed={user_data['id']}"
-    
+
     print(f"✅ [auth_service] Пользователь: {user_data.get('first_name')} (id={user_data.get('id')}, photo_url={photo_url})")
-    
+
     # Создаем пользователя в БД
     ensure_user_exists(
         user_id=user_data["id"],
@@ -90,7 +89,7 @@ def validate_init_data(init_data: str) -> TelegramUser:
         username=user_data.get("username"),
         photo_url=photo_url
     )
-    
+
     return TelegramUser(
         user_id=user_data["id"],
         first_name=user_data["first_name"],
