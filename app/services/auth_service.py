@@ -20,42 +20,42 @@ def _get_connection():
     return sqlite3.connect(DB_PATH)
 
 def validate_init_data(init_data: str) -> TelegramUser:
-    """
-    Валидирует initData от Telegram Mini Apps (официальный алгоритм)
-    """
     params = {}
     for pair in init_data.split("&"):
         if "=" in pair:
             key, value = pair.split("=", 1)
             params[key] = value
     
-    # ✅ ИСПРАВЛЕНО: Убран пробел!
+    # ✅ ПРОВЕРЯЕМ ОБА ВАРИАНТА:
     hash_value = params.pop("hash", None)
+    
+    # Если нет "hash" - пробуем "signature" (Login Widget)
     if not hash_value:
-        raise ValueError("Missing hash parameter")
-
+        hash_value = params.pop("signature", None)
+        if not hash_value:
+            raise ValueError("Missing hash/signature parameter")
+    
+    # ✅ ОСТАЛЬНОЙ КОД БЕЗ ИЗМЕНЕНИЙ...
     sorted_params = sorted(params.items(), key=lambda x: x[0])
-    # ✅ ИСПРАВЛЕНО: Убраны пробелы!
     data_check_string = "\n".join([f"{k}={v}" for k, v in sorted_params])
-
-    # ✅ ИСПРАВЛЕНО: Убран пробел в b"WebAppData"!
+    
     secret_key = hmac.new(
         key=b"WebAppData",
         msg=BOT_TOKEN.encode(),
         digestmod=hashlib.sha256,
     ).digest()
-
+    
     computed_hash = hmac.new(
         key=secret_key,
         msg=data_check_string.encode(),
         digestmod=hashlib.sha256,
     ).hexdigest()
-
+    
     if not hmac.compare_digest(computed_hash, hash_value):
         print(f"❌ Hash mismatch!")
         print(f"Computed: {computed_hash}")
         print(f"Expected: {hash_value}")
-        print(f"Data: {data_check_string[:100]}...")
+        print(f"Data: {data_check_string[:200]}...")
         raise ValueError("Invalid signature")
 
     # ✅ ИСПРАВЛЕНО: Убран пробел!
