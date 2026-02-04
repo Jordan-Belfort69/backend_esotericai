@@ -1,11 +1,13 @@
-# ===== ИСПРАВЛЕННЫЙ И ФИНАЛЬНЫЙ КОД =====
+# ===== ИСПРАВЛЕННЫЙ КОД С НЕОБХОДИМЫМ ИМПОРТОМ =====
 import hashlib
 import hmac
-import urllib.parse
+from urllib.parse import parse_qsl, unquote  # ✅ ДОБАВЛЕН unquote!
 from typing import Optional, NamedTuple
 import sqlite3
 from datetime import datetime
+import json
 from core.config import BOT_TOKEN, DB_PATH
+
 
 class TelegramUser(NamedTuple):
     user_id: int
@@ -16,42 +18,33 @@ class TelegramUser(NamedTuple):
     allows_write_to_pm: bool
     photo_url: Optional[str] = None
 
+
 def _get_connection():
     return sqlite3.connect(DB_PATH)
 
+
 def validate_init_data(init_data: str) -> TelegramUser:
     """
-    Валидирует initData от Telegram Mini Apps (официальный алгоритм)
-    ВАЖНО: Для формирования хеша используем ИСХОДНЫЕ ЗАКОДИРОВАННЫЕ значения!
+    ✅ ТОЧНО ПО УСЛОВИЯМ: используем parse_qsl с keep_blank_values=True
     """
-    # ✅ ПАРСИМ ВРУЧНУЮ, чтобы сохранить закодированные значения для хеша
-    params = {}
-    for pair in init_data.split("&"):
-        if "=" in pair:
-            key, value = pair.split("=", 1)
-            params[key] = value  # value остаётся ЗАКОДИРОВАННЫМ!
-    
-    # ✅ ДЕБАЖНЫЙ ВЫВОД для отладки
     print(f"🔍 [auth_service] Получен initData (первые 100 символов): {init_data[:100]}...")
-    print(f"🔍 [auth_service] Параметры: {list(params.keys())}")
     
-    # ✅ Ищем хеш (только для Mini Apps)
+    # ✅ ТОЧНО ПО УСЛОВИЯМ БЭКЕНДА
+    params = dict(parse_qsl(init_data, keep_blank_values=True))
     hash_value = params.pop("hash", None)
     if not hash_value:
-        # Для совместимости с разными источниками (не обязательно)
-        hash_value = params.pop("signature", None)
-        if not hash_value:
-            raise ValueError("Missing hash parameter")
+        raise ValueError("Missing hash parameter")
     
     print(f"🔍 [auth_service] Hash из запроса: {hash_value[:20]}...")
+    print(f"🔍 [auth_service] Параметры после удаления hash: {list(params.keys())}")
     
-    # ✅ Формируем строку из ЗАКОДИРОВАННЫХ значений (как требует Telegram)
+    # ✅ Формируем строку для проверки хеша (сортируем по ключам)
     sorted_params = sorted(params.items(), key=lambda x: x[0])
     data_check_string = "\n".join([f"{k}={v}" for k, v in sorted_params])
     
     # ✅ Вычисляем секретный ключ
     secret_key = hmac.new(
-        key=b"WebAppData",  # ← Без пробела!
+        key=b"WebAppData",
         msg=BOT_TOKEN.encode(),
         digestmod=hashlib.sha256,
     ).digest()
@@ -73,14 +66,13 @@ def validate_init_data(init_data: str) -> TelegramUser:
     
     print(f"✅ [auth_service] Хеш валидирован успешно!")
     
-    # ✅ Теперь декодируем ТОЛЬКО параметр user для получения данных
+    # ✅ Парсим user данные
     user_data_str = params.get("user")
     if not user_data_str:
         raise ValueError("Missing user parameter")
     
-    # Декодируем URL → получаем JSON-строку → парсим в объект
-    import json
-    user_data = json.loads(urllib.parse.unquote(user_data_str))
+    # ✅ ТЕПЕРЬ РАБОТАЕТ: Декодируем URL → JSON → объект
+    user_data = json.loads(unquote(user_data_str))
     
     print(f"✅ [auth_service] Пользователь: {user_data.get('first_name')} (id={user_data.get('id')})")
     
@@ -93,6 +85,7 @@ def validate_init_data(init_data: str) -> TelegramUser:
         allows_write_to_pm=user_data.get("allows_write_to_pm", False),
         photo_url=user_data.get("photo_url")
     )
+
 
 def ensure_user_exists(user_id: int, first_name: str, username: str | None = None) -> None:
     """
