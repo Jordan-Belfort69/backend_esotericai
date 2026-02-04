@@ -4,7 +4,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 BASE_DIR = PROJECT_ROOT / "app"
 DB_PATH = BASE_DIR / "db" / "users.db"
-BOT_TOKEN = "8585375528:AAHlPi5dhKHwU5b7AEqf_Y6Ogy7zIygWc5Q"
+BOT_TOKEN = "8320610566:AAE1RlYeD7bpLaWaoZ9ZilVurR8JxsuJ7kM"
 
 # ✅ ИСПРАВЛЕНО: Убраны пробелы в ключах!
 LEVELS = [
