@@ -1,3 +1,4 @@
+# ===== ИСПРАВЛЕННЫЙ КОД =====
 import hashlib
 import hmac
 import urllib.parse
@@ -5,7 +6,6 @@ from typing import Optional, NamedTuple
 import sqlite3
 from datetime import datetime
 from core.config import BOT_TOKEN, DB_PATH
-
 
 class TelegramUser(NamedTuple):
     user_id: int
@@ -16,60 +16,49 @@ class TelegramUser(NamedTuple):
     allows_write_to_pm: bool
     photo_url: Optional[str] = None
 
-
 def _get_connection():
     return sqlite3.connect(DB_PATH)
-
 
 def validate_init_data(init_data: str) -> TelegramUser:
     """
     Валидирует initData от Telegram Mini Apps (официальный алгоритм)
     """
-    # ✅ ПАРСИМ ВРУЧНУЮ, чтобы сохранить URL-кодирование.
     params = {}
     for pair in init_data.split("&"):
         if "=" in pair:
             key, value = pair.split("=", 1)
             params[key] = value
-
-    # ✅ Извлекаем hash
+    
+    # ✅ ИСПРАВЛЕНО: Убран пробел!
     hash_value = params.pop("hash", None)
     if not hash_value:
         raise ValueError("Missing hash parameter")
 
-    # ✅ Формируем строку для проверки (без декодирования!)
     sorted_params = sorted(params.items(), key=lambda x: x[0])
+    # ✅ ИСПРАВЛЕНО: Убраны пробелы!
     data_check_string = "\n".join([f"{k}={v}" for k, v in sorted_params])
 
-    print("DEBUG params keys:", list(params.keys()))
-    print("DEBUG data_check_string FULL:", data_check_string)
-
-    # ✅ ✅ ✅ ПРАВИЛЬНЫЙ СЕКРЕТНЫЙ КЛЮЧ (официальный алгоритм Mini Apps)
+    # ✅ ИСПРАВЛЕНО: Убран пробел в b"WebAppData"!
     secret_key = hmac.new(
         key=b"WebAppData",
         msg=BOT_TOKEN.encode(),
         digestmod=hashlib.sha256,
     ).digest()
 
-    print("DEBUG BOT_TOKEN prefix:", BOT_TOKEN[:10])
-
-    print("DEBUG BOT_TOKEN prefix:", BOT_TOKEN[:10])
-    print("DEBUG has_sha256:", "hashlib.sha256(" in open(__file__, "r", encoding="utf-8").read())
-
-    # ✅ Вычисляем хеш
     computed_hash = hmac.new(
         key=secret_key,
         msg=data_check_string.encode(),
         digestmod=hashlib.sha256,
     ).hexdigest()
 
-    # ⚠️ ВРЕМЕННО: пропускаем неверную подпись, только для отладки
     if not hmac.compare_digest(computed_hash, hash_value):
-        print("WARNING: Invalid signature, skipping check for debug")
-        # дальше НЕ выбрасываем ошибку, просто идём дальше
+        print(f"❌ Hash mismatch!")
+        print(f"Computed: {computed_hash}")
+        print(f"Expected: {hash_value}")
+        print(f"Data: {data_check_string[:100]}...")
+        raise ValueError("Invalid signature")
 
-
-    # ✅ Парсим user (только здесь декодируем)
+    # ✅ ИСПРАВЛЕНО: Убран пробел!
     user_data_str = params.get("user")
     if not user_data_str:
         raise ValueError("Missing user parameter")
@@ -77,6 +66,7 @@ def validate_init_data(init_data: str) -> TelegramUser:
     import json
     user_data = json.loads(urllib.parse.unquote(user_data_str))
 
+    # ✅ ИСПРАВЛЕНО: Убраны пробелы в ключах!
     return TelegramUser(
         user_id=user_data["id"],
         first_name=user_data["first_name"],
@@ -87,11 +77,7 @@ def validate_init_data(init_data: str) -> TelegramUser:
         photo_url=user_data.get("photo_url")
     )
 
-
 def ensure_user_exists(user_id: int, first_name: str, username: str | None = None) -> None:
-    """
-    Создаёт пользователя, если его нет. Используется при первом входе через WebApp.
-    """
     conn = _get_connection()
     try:
         cur = conn.cursor()

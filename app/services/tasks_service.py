@@ -1,5 +1,4 @@
-# app/services/tasks_service.py
-
+# ===== ИСПРАВЛЕННЫЙ КОД =====
 import sqlite3
 from pathlib import Path
 from typing import List, Dict, Any, Literal
@@ -7,33 +6,28 @@ from core.config import DB_PATH
 from app.services.user_balance_service import change_messages_balance, add_user_xp, get_messages_balance, get_user_xp
 
 # === КОНФИГ ЗАДАЧ (дублирует фронт, но для сервера) ===
-# Формат: { task_code: { category, progress_target, rewards } }
 TASK_CONFIG = {
     # Daily
     "D_DAILY": {"category": "daily", "progress_target": 1},
     "D_REQ_DAILY": {"category": "daily", "progress_target": 1},
-
     # Activity
     "D_1": {"category": "activity", "progress_target": 1},
     "D_2": {"category": "activity", "progress_target": 1},
     "D_3": {"category": "activity", "progress_target": 1},
     "D_4": {"category": "activity", "progress_target": 1},
     "D_5": {"category": "activity", "progress_target": 1},
-
     # Referral
     "REF_1": {"category": "referral", "progress_target": 1},
     "REF_2": {"category": "referral", "progress_target": 2},
     "REF_3": {"category": "referral", "progress_target": 3},
     "REF_4": {"category": "referral", "progress_target": 4},
     "REF_5": {"category": "referral", "progress_target": 5},
-
     # Usage
     "USE_1": {"category": "usage", "progress_target": 5},
     "USE_2": {"category": "usage", "progress_target": 10},
     "USE_3": {"category": "usage", "progress_target": 20},
     "USE_4": {"category": "usage", "progress_target": 30},
     "USE_5": {"category": "usage", "progress_target": 50},
-
     # Purchases
     "BUY_0": {"category": "purchases", "progress_target": 1},
     "BUY_1": {"category": "purchases", "progress_target": 1},
@@ -41,7 +35,6 @@ TASK_CONFIG = {
     "BUY_3": {"category": "purchases", "progress_target": 1},
     "BUY_4": {"category": "purchases", "progress_target": 1},
     "BUY_5": {"category": "purchases", "progress_target": 1},
-
     # Levels
     "LEVEL_UP_1": {"category": "levels", "progress_target": 1},
     "LEVEL_UP_2": {"category": "levels", "progress_target": 1},
@@ -51,7 +44,7 @@ TASK_CONFIG = {
     "LEVEL_UP_6": {"category": "levels", "progress_target": 1},
 }
 
-# === НАГРАДЫ (как раньше) ===
+# === НАГРАДЫ ===
 TASK_REWARDS = {
     "D_DAILY": [{"type": "xp", "amount": 2}],
     "D_REQ_DAILY": [{"type": "xp", "amount": 3}],
@@ -90,12 +83,11 @@ def _get_connection() -> sqlite3.Connection:
     return conn
 
 def ensure_task_record(user_id: int, task_code: str) -> None:
-    """Создаёт запись задачи, если её нет. Обязательно указывает progress_target."""
+    """Создаёт запись задачи, если её нет."""
     if task_code not in TASK_CONFIG:
         return
-    
     progress_target = TASK_CONFIG[task_code]["progress_target"]
-    
+
     conn = _get_connection()
     try:
         cur = conn.cursor()
@@ -145,7 +137,7 @@ def get_tasks_by_category(user_id: int, category: str) -> List[Dict[str, Any]]:
             claimed = bool(row and row["reward_claimed"])
         finally:
             conn.close()
-
+        
         target = cfg["progress_target"]
         if claimed:
             status = "completed"
@@ -189,7 +181,7 @@ def claim_task_reward(user_id: int, task_code: str) -> Dict[str, Any]:
     """Начисляет награды и возвращает новые балансы."""
     if not is_task_claimable(user_id, task_code):
         raise ValueError("Task not claimable")
-
+    
     rewards = TASK_REWARDS.get(task_code, [])
     xp_delta = 0
     sms_delta = 0
@@ -200,7 +192,7 @@ def claim_task_reward(user_id: int, task_code: str) -> Dict[str, Any]:
         elif r["type"] == "sms":
             sms_delta += r["amount"]
         elif r["type"] == "promocode":
-            # Промокоды пока не обрабатываем (можно добавить позже)
+            # Промокоды пока не обрабатываем
             pass
 
     if xp_delta > 0:

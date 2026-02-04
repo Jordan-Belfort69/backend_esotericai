@@ -1,3 +1,4 @@
+# ===== ИСПРАВЛЕННЫЙ КОД =====
 import sqlite3
 from datetime import datetime
 from typing import Optional, Dict, Any
@@ -14,13 +15,13 @@ def ensure_user_exists(user_id: int, first_name: str, username: str | None = Non
     try:
         cur = conn.cursor()
         cur.execute("""
-            INSERT INTO users (
-                user_id, first_name, username, created_at, updated_at,
-                messages_balance
-            ) VALUES (?, ?, ?, ?, ?, 0)
-            ON CONFLICT(user_id) DO UPDATE SET
-                username = excluded.username,
-                updated_at = excluded.updated_at
+        INSERT INTO users (
+            user_id, first_name, username, created_at, updated_at,
+            messages_balance
+        ) VALUES (?, ?, ?, ?, ?, 0)
+        ON CONFLICT(user_id) DO UPDATE SET
+            username = excluded.username,
+            updated_at = excluded.updated_at
         """, (
             user_id,
             first_name,
@@ -37,9 +38,9 @@ def _get_user_row(user_id: int) -> Optional[Dict[str, Any]]:
     try:
         cur = conn.cursor()
         cur.execute("""
-            SELECT user_id, username, first_name, created_at, updated_at,
-                   messages_balance, is_banned
-            FROM users WHERE user_id = ?
+        SELECT user_id, username, first_name, created_at, updated_at,
+        messages_balance, is_banned
+        FROM users WHERE user_id = ?
         """, (user_id,))
         row = cur.fetchone()
         return dict(row) if row else None
@@ -50,9 +51,8 @@ def get_user_profile(user_id: int) -> Optional[Dict[str, Any]]:
     user = _get_user_row(user_id)
     if user is None:
         return None
-    
     created_at = user.get("created_at") or datetime.utcnow().isoformat()
-    
+
     # Подсчитываем друзей
     conn = _get_connection()
     try:

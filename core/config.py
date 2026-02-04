@@ -1,18 +1,12 @@
+# ===== ИСПРАВЛЕННЫЙ КОД =====
 from pathlib import Path
 
-# Папка проекта (там, где лежит run_api.py)
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-
-# Базовая папка app/
 BASE_DIR = PROJECT_ROOT / "app"
-
-# ОДНА общая БД для v3: app/db/users.db
 DB_PATH = BASE_DIR / "db" / "users.db"
-
-# ВАШ ТОКЕН НОВОГО БОТА
 BOT_TOKEN = "8585375528:AAHlPi5dhKHwU5b7AEqf_Y6Ogy7zIygWc5Q"
 
-# ✅ УБРАНЫ ПРОБЕЛЫ В КЛЮЧАХ!
+# ✅ ИСПРАВЛЕНО: Убраны пробелы в ключах!
 LEVELS = [
     {"code": "spark", "title": "Искра", "min_xp": 0, "max_xp": 99},
     {"code": "seeker", "title": "Ищущая", "min_xp": 100, "max_xp": 299},

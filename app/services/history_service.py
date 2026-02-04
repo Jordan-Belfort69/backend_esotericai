@@ -1,5 +1,4 @@
-# app/services/history_service.py
-
+# ===== ИСПРАВЛЕННЫЙ КОД =====
 import sqlite3
 from pathlib import Path
 from typing import List, Dict, Any, Optional
@@ -22,7 +21,6 @@ def log_event(
     conn = _get_connection()
     try:
         cur = conn.cursor()
-        
         # Обрезаем ответ для превью (первые 100 символов)
         answer_short = answer_full[:100] + "..." if len(answer_full) > 100 else answer_full
         
@@ -51,7 +49,6 @@ def list_history(user_id: int, limit: int = 20, offset: int = 0) -> List[Dict[st
     conn = _get_connection()
     try:
         cur = conn.cursor()
-        
         cur.execute("""
             SELECT id, type, question, answer_short, created_at
             FROM history
@@ -80,7 +77,6 @@ def get_history_detail(user_id: int, event_id: int) -> Optional[Dict[str, Any]]:
     conn = _get_connection()
     try:
         cur = conn.cursor()
-        
         cur.execute("""
             SELECT id, type, question, answer_full, created_at
             FROM history
