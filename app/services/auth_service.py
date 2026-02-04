@@ -20,6 +20,9 @@ def _get_connection():
     return sqlite3.connect(DB_PATH)
 
 def validate_init_data(init_data: str) -> TelegramUser:
+    print(f"🔍 [BACKEND] Получен initData (первые 100 символов): {init_data[:100]}...")
+    print(f"🔍 [BACKEND] Длина initData: {len(init_data)}")
+    
     params = {}
     for pair in init_data.split("&"):
         if "=" in pair:
