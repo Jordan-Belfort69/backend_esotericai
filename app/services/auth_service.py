@@ -1,6 +1,6 @@
 import hashlib
 import hmac
-from urllib.parse import parse_qsl, unquote
+from urllib.parse import parse_qsl
 from typing import Optional, NamedTuple
 import sqlite3
 from datetime import datetime
@@ -24,14 +24,10 @@ def _get_connection():
 
 def validate_init_data(init_data: str) -> TelegramUser:
     """
-    Валидация initData из Telegram Mini App и извлечение данных пользователя
-    по официальной схеме Telegram.
+    Валидация initData из Telegram Mini App и извлечение данных пользователя.
+    Ожидаем, что фронт передаёт initData БЕЗ дополнительного encodeURIComponent.
     """
     print(f"🔍 [auth_service] Получен initData (первые 100 символов): {init_data[:100]}...")
-
-    # Фронт отправляет initData с encodeURIComponent(initData),
-    # поэтому сначала один раз декодируем всю строку.
-    decoded = unquote(init_data)
 
     # Разбираем строку initData в словарь параметров
     params = dict(parse_qsl(init_data, keep_blank_values=True))
