@@ -7,8 +7,8 @@ router = APIRouter(prefix="/api")
 
 
 @router.get("/me")
-async def get_me(  # ✅ async def!
-    user_id: CurrentUserDep
+async def get_me(
+    user_id: CurrentUserDep,
 ):
     """
     Возвращает профиль пользователя с полным статусом.
@@ -17,9 +17,9 @@ async def get_me(  # ✅ async def!
     if profile is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="User profile not found"
+            detail="User profile not found",
         )
-    
+
     return {
         "user_id": user_id,
         "name": profile["name"],

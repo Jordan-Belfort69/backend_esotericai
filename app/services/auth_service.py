@@ -22,10 +22,44 @@ def _get_connection():
     return sqlite3.connect(DB_PATH)
 
 
+def ensure_user_exists(
+    user_id: int,
+    first_name: str,
+    username: str | None = None,
+    photo_url: str | None = None,
+) -> None:
+    conn = _get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO users (
+                user_id, first_name, username, created_at, updated_at,
+                messages_balance, photo_url
+            ) VALUES (?, ?, ?, ?, ?, 0, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                username   = excluded.username,
+                updated_at = excluded.updated_at,
+                photo_url  = excluded.photo_url
+            """,
+            (
+                user_id,
+                first_name,
+                username,
+                datetime.utcnow().isoformat(),
+                datetime.utcnow().isoformat(),
+                photo_url,
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def validate_init_data(init_data: str) -> TelegramUser:
     print(f"🔍 [auth_service] Получен initData (первые 100 символов): {init_data[:100]}...")
 
-    # init_data уже такого вида: "query_id=...&user=...&auth_date=...&hash=..."
+    # init_data вида: "query_id=...&user=...&auth_date=...&hash=..."
     params = dict(parse_qsl(init_data, keep_blank_values=True))
 
     hash_value = params.pop("hash", None)
@@ -85,37 +119,3 @@ def validate_init_data(init_data: str) -> TelegramUser:
         allows_write_to_pm=user_data.get("allows_write_to_pm", False),
         photo_url=photo_url,
     )
-
-
-def ensure_user_exists(
-    user_id: int,
-    first_name: str,
-    username: str | None = None,
-    photo_url: str | None = None,
-) -> None:
-    conn = _get_connection()
-    try:
-        cur = conn.cursor()
-        cur.execute(
-            """
-            INSERT INTO users (
-                user_id, first_name, username, created_at, updated_at,
-                messages_balance, photo_url
-            ) VALUES (?, ?, ?, ?, ?, 0, ?)
-            ON CONFLICT(user_id) DO UPDATE SET
-                username   = excluded.username,
-                updated_at = excluded.updated_at,
-                photo_url  = excluded.photo_url
-            """,
-            (
-                user_id,
-                first_name,
-                username,
-                datetime.utcnow().isoformat(),
-                datetime.utcnow().isoformat(),
-                photo_url,
-            ),
-        )
-        conn.commit()
-    finally:
-        conn.close()
