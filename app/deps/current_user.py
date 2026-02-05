@@ -1,32 +1,26 @@
-from fastapi import Depends, Query, HTTPException
+from fastapi import Depends, HTTPException, Request
 from typing import Annotated
-from app.services.auth_service import validate_init_data, ensure_user_exists
+from app.services.auth_service import ensure_user_exists
 
 
-async def CurrentUser(
-    initData: Annotated[str | None, Query(alias="initData")] = None,
-) -> int:
+async def CurrentUser(request: Request) -> int:
     """
-    Зависимость для получения user_id из валидированного initData.
+    Получает user_id, который уже положен в request.state.user_id
+    middleware-ом validate_telegram_init_data.
     Гарантирует, что пользователь существует в БД.
     """
-    if not initData:
-        raise HTTPException(status_code=400, detail="initData required")
-    
-    print(f"🔍 Получен initData (первые 50 символов): {initData[:50]}...")
+    user_id = getattr(request.state, "user_id", None)
+    if user_id is None:
+        # initData не прошёл валидацию в middleware или не был передан
+        raise HTTPException(status_code=401, detail="Unauthorized")
 
-    telegram_user = validate_init_data(initData)
-    user_id = telegram_user.user_id
-
-    print(f"✅ Валидирован пользователь: {user_id} ({telegram_user.first_name})")
-
-    # ВАЖНО: передаём photo_url из telegram_user
-    ensure_user_exists(
-        user_id=user_id,
-        first_name=telegram_user.first_name,
-        username=telegram_user.username,
-        photo_url=telegram_user.photo_url,  # ← вот этого сейчас не хватает
-    )
+    # Здесь, если нужно, можно подгрузить/обновить пользователя в БД.
+    # У тебя ensure_user_exists сейчас требует first_name и т.п.,
+    # поэтому либо:
+    #  - оставляем запись пользователя в auth_service.validate_init_data,
+    #  - либо здесь вообще ничего не делаем.
+    # Предлагаю пока не вызывать ensure_user_exists ещё раз,
+    # чтобы не городить дополнительную логику.
 
     return user_id
 

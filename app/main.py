@@ -1,9 +1,11 @@
 import sys
 from pathlib import Path
+
 sys.path.append(str(Path(__file__).parent))
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
 from app.api.me import router as me_router
 from app.api.history import router as history_router
 from app.api.tasks import router as tasks_router
@@ -13,11 +15,11 @@ from app.api.subs import router as subs_router
 from app.api.rituals import router as rituals_router
 from app.api.horoscope import router as horoscope_router
 from app.api.tarot import router as tarot_router
-from app.services.auth_service import validate_init_data
+
 
 app = FastAPI(title="EsotericAI Backend v3")
 
-# ✅ ИСПРАВЛЕНО: Полный список доменов для CORS
+# CORS как у тебя было по последним скринам
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -27,17 +29,12 @@ app.add_middleware(
         "https://webapp.telegram.org",
         "https://t.me",
     ],
-    allow_origin_regex=r"https://jordan-belfort69\.github\.io/.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Middleware для валидации Telegram initData
-@app.middleware("http")
-async def validate_telegram_init_data(request: Request, call_next):
-    return await call_next(request)
-
+# НИКАКОГО middleware, валидирующего initData тут нет
 
 # Подключение роутеров
 app.include_router(me_router)
@@ -49,6 +46,7 @@ app.include_router(subs_router)
 app.include_router(rituals_router)
 app.include_router(horoscope_router)
 app.include_router(tarot_router)
+
 
 @app.get("/health")
 def health_check():

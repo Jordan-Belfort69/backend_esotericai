@@ -24,7 +24,7 @@ def _get_connection():
 
 def validate_init_data(init_data: str) -> TelegramUser:
     """
-    Валидация initData из Telegram Mini App и извлечение данных пользователя.
+    Валидация initData из Telegram Mini App.
     """
     print(f"🔍 [auth_service] Получен initData (первые 100 символов): {init_data[:100]}...")
 
@@ -39,7 +39,7 @@ def validate_init_data(init_data: str) -> TelegramUser:
     print(f"🔍 [auth_service] Hash из запроса: {hash_value[:20]}...")
     print(f"🔍 [auth_service] Параметры после удаления hash: {list(params.keys())}")
 
-    # Собираем data_check_string (параметры, отсортированные по ключу)
+    # Собираем данные для проверки (сортируем по ключам)
     sorted_params = sorted(params.items(), key=lambda x: x[0])
     data_check_string = "\n".join(f"{k}={v}" for k, v in sorted_params)
 
@@ -57,10 +57,6 @@ def validate_init_data(init_data: str) -> TelegramUser:
         digestmod=hashlib.sha256,
     ).hexdigest()
 
-    print("🔍 [auth_service] data_check_string (first 300):", data_check_string[:300])
-    print("🔍 [auth_service] computed_hash:", computed_hash)
-    print("🔍 [auth_service] expected_hash:", hash_value)
-
     # Сравниваем хеши
     if not hmac.compare_digest(computed_hash, hash_value):
         print("❌ [auth_service] Hash mismatch!")
@@ -71,12 +67,12 @@ def validate_init_data(init_data: str) -> TelegramUser:
 
     print("✅ [auth_service] Хеш валидирован успешно!")
 
-    # Достаём user
+    # Получаем данные пользователя
     user_data_str = params.get("user")
     if not user_data_str:
         raise ValueError("Missing user parameter")
 
-    # user уже декодирован parse_qsl → это обычная JSON-строка
+    # JSON уже декодирован parse_qsl → обычная строка JSON
     user_data = json.loads(user_data_str)
 
     # Генерируем URL аватарки, если photo_url отсутствует
@@ -90,7 +86,7 @@ def validate_init_data(init_data: str) -> TelegramUser:
         f"(id={user_data.get('id')}, photo_url={photo_url})"
     )
 
-    # Создаём / обновляем пользователя в БД (как было раньше)
+    # Создаем / обновляем пользователя в БД
     ensure_user_exists(
         user_id=user_data["id"],
         first_name=user_data["first_name"],
@@ -98,7 +94,6 @@ def validate_init_data(init_data: str) -> TelegramUser:
         photo_url=photo_url,
     )
 
-    # Возвращаем структурированные данные
     return TelegramUser(
         user_id=user_data["id"],
         first_name=user_data["first_name"],
@@ -116,6 +111,9 @@ def ensure_user_exists(
     username: str | None = None,
     photo_url: str | None = None,
 ) -> None:
+    """
+    Создаёт пользователя в БД, если его нет.
+    """
     conn = _get_connection()
     try:
         cur = conn.cursor()
@@ -128,7 +126,7 @@ def ensure_user_exists(
             ON CONFLICT(user_id) DO UPDATE SET
                 username   = excluded.username,
                 updated_at = excluded.updated_at,
-                photo_url  = COALESCE(excluded.photo_url, users.photo_url)
+                photo_url  = excluded.photo_url
             """,
             (
                 user_id,
