@@ -13,7 +13,6 @@ from app.api.subs import router as subs_router
 from app.api.rituals import router as rituals_router
 from app.api.horoscope import router as horoscope_router
 from app.api.tarot import router as tarot_router
-from app.api.debug_db import router as debug_db_router
 from app.services.auth_service import validate_init_data
 
 app = FastAPI(title="EsotericAI Backend v3")
@@ -61,7 +60,6 @@ app.include_router(subs_router)
 app.include_router(rituals_router)
 app.include_router(horoscope_router)
 app.include_router(tarot_router)
-app.include_router(debug_db_router)
 
 @app.get("/health")
 def health_check():
