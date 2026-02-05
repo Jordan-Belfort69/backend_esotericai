@@ -34,7 +34,7 @@ def validate_init_data(init_data: str) -> TelegramUser:
     decoded = unquote(init_data)
 
     # Разбираем строку initData в словарь параметров
-    params = dict(parse_qsl(decoded, keep_blank_values=True))
+    params = dict(parse_qsl(init_data, keep_blank_values=True))
 
     # Извлекаем hash и удаляем его из параметров
     hash_value = params.pop("hash", None)
