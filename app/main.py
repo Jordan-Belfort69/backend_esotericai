@@ -21,16 +21,10 @@ from app.services.auth_service import validate_init_data
 
 app = FastAPI(title="EsotericAI Backend v3")
 
-# CORS
+# CORS — временно максимально широкий, чтобы не мешал отладке
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://jordan-belfort69.github.io",
-        "https://web-production-4d81b.up.railway.app",
-        "https://web.telegram.org",
-        "https://webapp.telegram.org",
-        "https://t.me",
-    ],
+    allow_origins=["*"],          # можно сузить позже до своего домена
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -42,14 +36,18 @@ async def validate_telegram_init_data(request: Request, call_next):
     # Пути, куда можно ходить без initData
     public_paths = {"/api/health", "/health"}
 
-    # Если путь публичный — пропускаем без проверки
+    # 1. Пропускаем preflight-запросы OPTIONS без проверки initData
+    if request.method == "OPTIONS":
+        return await call_next(request)
+
+    # 2. Пропускаем публичные пути без проверки
     if request.url.path in public_paths:
         return await call_next(request)
 
-    # Сначала пробуем взять initData из query-параметров (GET-запросы и т.п.)
+    # 3. Сначала пробуем взять initData из query-параметров (GET-запросы и т.п.)
     init_data = request.query_params.get("initData")
 
-    # Если не нашли и это метод с телом — пробуем достать initData из JSON body
+    # 4. Если не нашли и это метод с телом — пробуем достать initData из JSON body
     if not init_data and request.method in {"POST", "PUT", "PATCH", "DELETE"}:
         try:
             body_bytes = await request.body()
