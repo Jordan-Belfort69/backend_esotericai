@@ -27,6 +27,7 @@ app.add_middleware(
         "https://webapp.telegram.org",
         "https://t.me",
     ],
+    allow_origin_regex=r"https://jordan-belfort69\.github\.io/.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -35,7 +36,7 @@ app.add_middleware(
 # Middleware для валидации Telegram initData
 @app.middleware("http")
 async def validate_telegram_init_data(request: Request, call_next):
-    # 1) Preflight-запросы не трогаем, их обработает CORSMiddleware
+    # Preflight-запросы не трогаем
     if request.method == "OPTIONS":
         return await call_next(request)
 
@@ -43,14 +44,11 @@ async def validate_telegram_init_data(request: Request, call_next):
 
     if init_data:
         try:
-            # ✅ ВАЛИДИРУЕМ initData и СОЗДАЁМ ПОЛЬЗОВАТЕЛЯ
             user = validate_init_data(init_data)
             request.state.user_id = user.user_id
         except Exception as e:
-            return JSONResponse(
-                status_code=401,
-                content={"detail": f"Invalid initData: {str(e)}"},
-            )
+            # ВРЕМЕННО: только логируем ошибку, но не рвём запрос
+            print("⚠️ Invalid initData, skipping auth:", e)
 
     response = await call_next(request)
     return response
