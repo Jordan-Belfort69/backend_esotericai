@@ -1,11 +1,12 @@
 import hashlib
 import hmac
-from urllib.parse import parse_qsl
+from urllib.parse import parse_qsl, unquote  # ✅ ДОБАВЛЕН unquote!
 from typing import Optional, NamedTuple
 import sqlite3
 from datetime import datetime
 import json
 from core.config import BOT_TOKEN, DB_PATH
+
 
 class TelegramUser(NamedTuple):
     user_id: int
@@ -16,8 +17,10 @@ class TelegramUser(NamedTuple):
     allows_write_to_pm: bool
     photo_url: Optional[str] = None
 
+
 def _get_connection():
     return sqlite3.connect(DB_PATH)
+
 
 def validate_init_data(init_data: str) -> TelegramUser:
     """
@@ -28,7 +31,7 @@ def validate_init_data(init_data: str) -> TelegramUser:
     params = dict(parse_qsl(init_data, keep_blank_values=True))
     
     # Извлекаем хеш и удаляем его из параметров
-    hash_value = params.pop("hash", None)  # ✅ УБРАН ПРОБЕЛ!
+    hash_value = params.pop("hash", None)
 
     if not hash_value:
         raise ValueError("Missing hash parameter")
@@ -38,20 +41,20 @@ def validate_init_data(init_data: str) -> TelegramUser:
 
     # Собираем данные для проверки (сортируем по ключам)
     sorted_params = sorted(params.items(), key=lambda x: x[0])
-    data_check_string = "\n".join([f"{k}={v}" for k, v in sorted_params])  # ✅ УБРАНЫ ПРОБЕЛЫ!
+    data_check_string = "\n".join([f"{k}={v}" for k, v in sorted_params])
 
     # Генерируем секретный ключ
     secret_key = hmac.new(
-        key=b"WebAppData",  # ✅ УБРАН ПРОБЕЛ!
+        key=b"WebAppData",
         msg=BOT_TOKEN.encode(),
-        digestmod=hashlib.sha256,
+        digestmod=hashlib.sha256  # ✅ УБРАНА ЛИШНЯЯ ЗАПЯТАЯЯ!
     ).digest()
 
     # Вычисляем хеш
     computed_hash = hmac.new(
         key=secret_key,
         msg=data_check_string.encode(),
-        digestmod=hashlib.sha256,  # ✅ ИСПРАВЛЕНО: diges tmod → digestmod
+        digestmod=hashlib.sha256  # ✅ УБРАНА ЛИШНЯЯ ЗАПЯТАЯЯ!
     ).hexdigest()
 
     # Сравниваем хеши
@@ -65,16 +68,16 @@ def validate_init_data(init_data: str) -> TelegramUser:
     print(f"✅ [auth_service] Хеш валидирован успешно!")
 
     # Получаем данные пользователя
-    user_data_str = params.get("user")  # ✅ УБРАН ПРОБЕЛ!
+    user_data_str = params.get("user")
     if not user_data_str:
         raise ValueError("Missing user parameter")
 
-    # Декодируем данные пользователя
-    user_data = json.loads(user_data_str)
+    # ✅ КРИТИЧНО: Декодируем URL-encoded JSON!
+    user_data = json.loads(unquote(user_data_str))  # ✅ unquote ДО декодирования JSON!
 
     # Генерируем URL аватарки, если photo_url отсутствует
     photo_url = None
-    if "photo_url" in user_data and user_data["photo_url"]:  # ✅ УБРАНЫ ПРОБЕЛЫ!
+    if "photo_url" in user_data and user_data["photo_url"]:
         photo_url = user_data["photo_url"]
     else:
         # Используем Dicebear API для генерации аватарки
@@ -84,7 +87,7 @@ def validate_init_data(init_data: str) -> TelegramUser:
 
     # Создаем пользователя в БД
     ensure_user_exists(
-        user_id=user_data["id"],  # ✅ УБРАНЫ ПРОБЕЛЫ!
+        user_id=user_data["id"],
         first_name=user_data["first_name"],
         username=user_data.get("username"),
         photo_url=photo_url
@@ -99,6 +102,7 @@ def validate_init_data(init_data: str) -> TelegramUser:
         allows_write_to_pm=user_data.get("allows_write_to_pm", False),
         photo_url=photo_url
     )
+
 
 def ensure_user_exists(user_id: int, first_name: str, username: str | None = None, photo_url: str | None = None) -> None:
     """

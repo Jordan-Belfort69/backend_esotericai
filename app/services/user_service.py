@@ -3,10 +3,12 @@ from datetime import datetime
 from typing import Optional, Dict, Any
 from core.config import DB_PATH, LEVELS
 
+
 def _get_connection() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
+
 
 def ensure_user_exists(user_id: int, first_name: str, username: str | None = None, photo_url: str | None = None) -> None:
     """Создаёт пользователя, если его нет."""
@@ -34,19 +36,22 @@ def ensure_user_exists(user_id: int, first_name: str, username: str | None = Non
     finally:
         conn.close()
 
+
 def _get_user_row(user_id: int) -> Optional[Dict[str, Any]]:
     conn = _get_connection()
     try:
         cur = conn.cursor()
+        # ✅ УБРАН # КОММЕНТАРИЙ ИЗ SQL! Используй -- для SQL-комментариев
         cur.execute("""
             SELECT user_id, username, first_name, created_at, updated_at,
-                   messages_balance, is_banned, photo_url  # ✅ ДОБАВЛЕНО photo_url!
+                   messages_balance, is_banned, photo_url
             FROM users WHERE user_id = ?
         """, (user_id,))
         row = cur.fetchone()
         return dict(row) if row else None
     finally:
         conn.close()
+
 
 def get_user_profile(user_id: int) -> Optional[Dict[str, Any]]:
     user = _get_user_row(user_id)
@@ -60,7 +65,7 @@ def get_user_profile(user_id: int) -> Optional[Dict[str, Any]]:
     try:
         cur = conn.cursor()
         cur.execute("SELECT COUNT(*) AS cnt FROM users WHERE referrer_id = ?", (user_id,))
-        friends_invited = int(cur.fetchone()["cnt"] or 0)  # ✅ УБРАН ПРОБЕЛ!
+        friends_invited = int(cur.fetchone()["cnt"] or 0)
         
         cur.execute("SELECT COUNT(*) AS cnt FROM history WHERE user_id = ?", (user_id,))
         requests_total = int(cur.fetchone()["cnt"] or 0)
@@ -70,14 +75,14 @@ def get_user_profile(user_id: int) -> Optional[Dict[str, Any]]:
         
         cur.execute("SELECT xp FROM user_xp WHERE user_id = ?", (user_id,))
         xp_row = cur.fetchone()
-        xp = int(xp_row["xp"]) if xp_row and xp_row["xp"] is not None else 0  # ✅ УБРАН ПРОБЕЛ!
+        xp = int(xp_row["xp"]) if xp_row and xp_row["xp"] is not None else 0
     finally:
         conn.close()
 
     # Определяем уровень
     current_level = LEVELS[0]
     for lvl in LEVELS:
-        min_xp = lvl["min_xp"]  # ✅ УБРАНЫ ПРОБЕЛЫ!
+        min_xp = lvl["min_xp"]
         max_xp = lvl["max_xp"]
         if max_xp is None:
             if xp >= min_xp:
@@ -91,9 +96,9 @@ def get_user_profile(user_id: int) -> Optional[Dict[str, Any]]:
     balance = int(user.get("messages_balance") or 0)
 
     return {
-        "name": user.get("first_name") or "",  # ✅ УБРАНЫ ПРОБЕЛЫ В КЛЮЧАХ!
+        "name": user.get("first_name") or "",
         "username": user.get("username") or "",
-        "photo_url": user.get("photo_url"),  # ✅ ДОБАВЛЕНО!
+        "photo_url": user.get("photo_url"),
         "registered_at": created_at,
         "status_code": current_level["code"],
         "status_title": current_level["title"],

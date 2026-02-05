@@ -2,10 +2,14 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from app.deps.current_user import CurrentUserDep
 from app.services.user_service import get_user_profile
 
+
 router = APIRouter(prefix="/api")
 
+
 @router.get("/me")
-def get_me(user_id: CurrentUserDep):
+async def get_me(  # ✅ async def!
+    user_id: CurrentUserDep
+):
     """
     Возвращает профиль пользователя с полным статусом.
     """
@@ -17,10 +21,10 @@ def get_me(user_id: CurrentUserDep):
         )
     
     return {
-        "user_id": user_id,  # ✅ УБРАНЫ ПРОБЕЛЫ В КЛЮЧАХ!
+        "user_id": user_id,
         "name": profile["name"],
         "username": profile["username"],
-        "photo_url": profile["photo_url"],  # ✅ ДОБАВЛЕНО!
+        "photo_url": profile["photo_url"],
         "registered_at": profile["registered_at"],
         "status_code": profile["status_code"],
         "status_title": profile["status_title"],
