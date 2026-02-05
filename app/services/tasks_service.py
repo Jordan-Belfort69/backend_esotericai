@@ -4,8 +4,6 @@ from core.config import DB_PATH
 from app.services.user_balance_service import (
     change_messages_balance,
     add_user_xp,
-    get_messages_balance,
-    get_user_xp,
 )
 
 # === КОНФИГ ЗАДАЧ (с текстами, как во фронте) ===
@@ -329,12 +327,55 @@ def ensure_task_record(user_id: int, task_code: str) -> None:
         conn.close()
 
 
+def _apply_task_reward(user_id: int, task_code: str) -> None:
+    """Начисляет награды по задаче и помечает её как полученную (без возврата балансов)."""
+    rewards = TASK_REWARDS.get(task_code, [])
+    xp_delta = 0
+    sms_delta = 0
+
+    for r in rewards:
+        if r["type"] == "xp":
+            xp_delta += r["amount"]
+        elif r["type"] == "sms":
+            sms_delta += r["amount"]
+        elif r["type"] == "promocode":
+            # Промокоды пока не обрабатываем
+            pass
+
+    if xp_delta > 0:
+        add_user_xp(user_id, xp_delta)
+    if sms_delta > 0:
+        change_messages_balance(user_id, sms_delta)
+
+    conn = _get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE user_tasks
+            SET reward_claimed = 1
+            WHERE user_id = ? AND task_code = ?
+        """,
+            (user_id, task_code),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def increment_task_progress(user_id: int, task_code: str, delta: int = 1) -> None:
-    """Увеличивает прогресс задачи."""
+    """
+    Увеличивает прогресс задачи и, если цель достигнута и награда ещё не выдана,
+    автоматически начисляет её.
+    """
+    if task_code not in TASK_CONFIG:
+        return
+
     ensure_task_record(user_id, task_code)
     conn = _get_connection()
     try:
         cur = conn.cursor()
+        # Обновляем прогресс
         cur.execute(
             """
             UPDATE user_tasks
@@ -344,6 +385,23 @@ def increment_task_progress(user_id: int, task_code: str, delta: int = 1) -> Non
             (delta, TASK_CONFIG[task_code]["progress_target"], user_id, task_code),
         )
         conn.commit()
+
+        # Проверяем, не пора ли выдать награду
+        cur.execute(
+            """
+            SELECT progress_current, progress_target, reward_claimed
+            FROM user_tasks
+            WHERE user_id = ? AND task_code = ?
+        """,
+            (user_id, task_code),
+        )
+        row = cur.fetchone()
+        if (
+            row
+            and not row["reward_claimed"]
+            and row["progress_current"] >= row["progress_target"]
+        ):
+            _apply_task_reward(user_id, task_code)
     finally:
         conn.close()
 
@@ -380,7 +438,9 @@ def get_tasks_by_category(user_id: int, category: str) -> List[Dict[str, Any]]:
         if claimed:
             status = "completed"
         elif progress >= target:
-            status = "ready_to_claim"
+            # технически награда уже будет выдана при increment_task_progress,
+            # но на случай гонок показываем как готовую
+            status = "completed"
         elif progress > 0:
             status = "in_progress"
         else:
@@ -410,73 +470,3 @@ def get_tasks_by_category(user_id: int, category: str) -> List[Dict[str, Any]]:
         )
 
     return tasks
-
-
-def is_task_claimable(user_id: int, task_code: str) -> bool:
-    if task_code not in TASK_CONFIG:
-        return False
-    ensure_task_record(user_id, task_code)
-    conn = _get_connection()
-    try:
-        cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT progress_current, reward_claimed
-            FROM user_tasks
-            WHERE user_id = ? AND task_code = ?
-        """,
-            (user_id, task_code),
-        )
-        row = cur.fetchone()
-        if not row or row["reward_claimed"]:
-            return False
-        progress = row["progress_current"]
-        target = TASK_CONFIG[task_code]["progress_target"]
-        return progress >= target
-    finally:
-        conn.close()
-
-
-def claim_task_reward(user_id: int, task_code: str) -> Dict[str, Any]:
-    """Начисляет награды и возвращает новые балансы."""
-    if not is_task_claimable(user_id, task_code):
-        raise ValueError("Task not claimable")
-
-    rewards = TASK_REWARDS.get(task_code, [])
-    xp_delta = 0
-    sms_delta = 0
-
-    for r in rewards:
-        if r["type"] == "xp":
-            xp_delta += r["amount"]
-        elif r["type"] == "sms":
-            sms_delta += r["amount"]
-        elif r["type"] == "promocode":
-            # Промокоды пока не обрабатываем
-            pass
-
-    if xp_delta > 0:
-        add_user_xp(user_id, xp_delta)
-    if sms_delta > 0:
-        change_messages_balance(user_id, sms_delta)
-
-    conn = _get_connection()
-    try:
-        cur = conn.cursor()
-        cur.execute(
-            """
-            UPDATE user_tasks
-            SET reward_claimed = 1
-            WHERE user_id = ? AND task_code = ?
-        """,
-            (user_id, task_code),
-        )
-        conn.commit()
-    finally:
-        conn.close()
-
-    return {
-        "ok": True,
-        "new_xp": get_user_xp(user_id),
-        "new_credits_balance": get_messages_balance(user_id),
-    }
