@@ -19,7 +19,7 @@ from app.api.tarot import router as tarot_router
 
 app = FastAPI(title="EsotericAI Backend v3")
 
-# CORS как у тебя было по последним скринам
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -33,8 +33,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# НИКАКОГО middleware, валидирующего initData тут нет
 
 # Подключение роутеров
 app.include_router(me_router)
