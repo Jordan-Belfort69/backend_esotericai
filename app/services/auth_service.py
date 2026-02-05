@@ -72,8 +72,8 @@ def validate_init_data(init_data: str) -> TelegramUser:
     if not user_data_str:
         raise ValueError("Missing user parameter")
 
-    # user — это URL-encoded JSON
-    user_data = json.loads(unquote(user_data_str))
+    # user уже декодирован parse_qsl → это обычная JSON-строка
+    user_data = json.loads(user_data_str)
 
     # photo_url: либо из Telegram, либо fallback Dicebear
     photo_url = user_data.get("photo_url") or f"https://api.dicebear.com/7.x/avataaars/svg?seed={user_data['id']}"
