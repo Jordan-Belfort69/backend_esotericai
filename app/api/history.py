@@ -1,11 +1,11 @@
 # app/api/history.py
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from typing import Annotated
+from fastapi import APIRouter, HTTPException, Query
 from app.deps.current_user import CurrentUserDep
 from app.services.history_service import list_history, get_history_detail
 
 router = APIRouter(prefix="/api")
+
 
 @router.get("/history/list")
 def history_list(
@@ -18,9 +18,8 @@ def history_list(
     Соответствует фронтовому контракту.
     """
     items = list_history(user_id=user_id, limit=limit, offset=offset)
-    return {
-        "items": items
-    }
+    return {"items": items}
+
 
 @router.get("/history/detail/{record_id}")
 def history_detail(
@@ -34,5 +33,8 @@ def history_detail(
     # В сервисе параметр называется event_id, а не record_id
     record = get_history_detail(user_id=user_id, event_id=record_id)
     if not record:
-        raise HTTPException(status_code=404, detail="History record not found or access denied")
+        raise HTTPException(
+            status_code=404,
+            detail="History record not found or access denied",
+        )
     return record
