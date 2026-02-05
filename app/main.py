@@ -36,22 +36,8 @@ app.add_middleware(
 # Middleware для валидации Telegram initData
 @app.middleware("http")
 async def validate_telegram_init_data(request: Request, call_next):
-    # Preflight-запросы не трогаем
-    if request.method == "OPTIONS":
-        return await call_next(request)
+    return await call_next(request)
 
-    init_data = request.query_params.get("initData")
-
-    if init_data:
-        try:
-            user = validate_init_data(init_data)
-            request.state.user_id = user.user_id
-        except Exception as e:
-            # ВРЕМЕННО: только логируем ошибку, но не рвём запрос
-            print("⚠️ Invalid initData, skipping auth:", e)
-
-    response = await call_next(request)
-    return response
 
 # Подключение роутеров
 app.include_router(me_router)
