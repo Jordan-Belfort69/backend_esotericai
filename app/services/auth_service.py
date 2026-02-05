@@ -79,15 +79,26 @@ def validate_init_data(init_data: str) -> TelegramUser:
     # user уже декодирован parse_qsl → это обычная JSON-строка
     user_data = json.loads(user_data_str)
 
-    # photo_url: либо из Telegram, либо fallback Dicebear
-    photo_url = user_data.get("photo_url") or f"https://api.dicebear.com/7.x/avataaars/svg?seed={user_data['id']}"
+    # Генерируем URL аватарки, если photo_url отсутствует
+    if user_data.get("photo_url"):
+        photo_url = user_data["photo_url"]
+    else:
+        photo_url = f"https://api.dicebear.com/7.x/avataaars/svg?seed={user_data['id']}"
 
     print(
         f"✅ [auth_service] Пользователь: {user_data.get('first_name')} "
         f"(id={user_data.get('id')}, photo_url={photo_url})"
     )
 
-    # Возвращаем только структурированные данные; запись в БД делает CurrentUser
+    # Создаём / обновляем пользователя в БД (как было раньше)
+    ensure_user_exists(
+        user_id=user_data["id"],
+        first_name=user_data["first_name"],
+        username=user_data.get("username"),
+        photo_url=photo_url,
+    )
+
+    # Возвращаем структурированные данные
     return TelegramUser(
         user_id=user_data["id"],
         first_name=user_data["first_name"],
