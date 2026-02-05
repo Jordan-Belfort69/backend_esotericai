@@ -39,6 +39,13 @@ app.add_middleware(
 
 @app.middleware("http")
 async def validate_telegram_init_data(request: Request, call_next):
+    # Пути, куда можно ходить без initData
+    public_paths = {"/api/health", "/health"}
+
+    # Если путь публичный — пропускаем без проверки
+    if request.url.path in public_paths:
+        return await call_next(request)
+
     # Сначала пробуем взять initData из query-параметров (GET-запросы и т.п.)
     init_data = request.query_params.get("initData")
 
