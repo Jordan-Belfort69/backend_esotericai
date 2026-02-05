@@ -57,6 +57,10 @@ def validate_init_data(init_data: str) -> TelegramUser:
         digestmod=hashlib.sha256,
     ).hexdigest()
 
+    print("🔍 [auth_service] data_check_string (first 300):", data_check_string[:300])
+    print("🔍 [auth_service] computed_hash:", computed_hash)
+    print("🔍 [auth_service] expected_hash:", hash_value)
+
     # Сравниваем хеши
     if not hmac.compare_digest(computed_hash, hash_value):
         print("❌ [auth_service] Hash mismatch!")
