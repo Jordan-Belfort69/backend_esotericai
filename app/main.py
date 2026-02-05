@@ -39,8 +39,31 @@ app.add_middleware(
 
 @app.middleware("http")
 async def validate_telegram_init_data(request: Request, call_next):
-    # initData передаётся в query-параметрах
+    # Сначала пробуем взять initData из query-параметров (GET-запросы и т.п.)
     init_data = request.query_params.get("initData")
+
+    # Если не нашли и это метод с телом — пробуем достать initData из JSON body
+    if not init_data and request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+        try:
+            body_bytes = await request.body()
+            if body_bytes:
+                import json
+
+                body = json.loads(body_bytes.decode("utf-8"))
+                init_data = body.get("initData")
+
+                # Восстанавливаем request с тем же телом для дальнейших хэндлеров
+                async def receive():
+                    return {
+                        "type": "http.request",
+                        "body": body_bytes,
+                        "more_body": False,
+                    }
+
+                request = Request(request.scope, receive)
+        except Exception as e:
+            print(f"⚠️ [middleware] failed to read body for initData: {e}")
+
     if not init_data:
         return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
 
