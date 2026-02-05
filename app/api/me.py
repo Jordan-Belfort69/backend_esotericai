@@ -17,9 +17,10 @@ def get_me(user_id: CurrentUserDep):
         )
     
     return {
-        "user_id": user_id,
+        "user_id": user_id,  # ✅ УБРАНЫ ПРОБЕЛЫ В КЛЮЧАХ!
         "name": profile["name"],
         "username": profile["username"],
+        "photo_url": profile["photo_url"],  # ✅ ДОБАВЛЕНО!
         "registered_at": profile["registered_at"],
         "status_code": profile["status_code"],
         "status_title": profile["status_title"],

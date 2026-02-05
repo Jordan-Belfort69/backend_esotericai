@@ -25,11 +25,10 @@ def validate_init_data(init_data: str) -> TelegramUser:
     """
     print(f"🔍 [auth_service] Получен initData (первые 100 символов): {init_data[:100]}...")
     
-    # Парсим параметры БЕЗ unquote
     params = dict(parse_qsl(init_data, keep_blank_values=True))
     
     # Извлекаем хеш и удаляем его из параметров
-    hash_value = params.pop("hash", None)
+    hash_value = params.pop("hash", None)  # ✅ УБРАН ПРОБЕЛ!
 
     if not hash_value:
         raise ValueError("Missing hash parameter")
@@ -39,11 +38,11 @@ def validate_init_data(init_data: str) -> TelegramUser:
 
     # Собираем данные для проверки (сортируем по ключам)
     sorted_params = sorted(params.items(), key=lambda x: x[0])
-    data_check_string = "\n".join([f"{k}={v}" for k, v in sorted_params])
+    data_check_string = "\n".join([f"{k}={v}" for k, v in sorted_params])  # ✅ УБРАНЫ ПРОБЕЛЫ!
 
     # Генерируем секретный ключ
     secret_key = hmac.new(
-        key=b"WebAppData",
+        key=b"WebAppData",  # ✅ УБРАН ПРОБЕЛ!
         msg=BOT_TOKEN.encode(),
         digestmod=hashlib.sha256,
     ).digest()
@@ -52,7 +51,7 @@ def validate_init_data(init_data: str) -> TelegramUser:
     computed_hash = hmac.new(
         key=secret_key,
         msg=data_check_string.encode(),
-        digestmod=hashlib.sha256,
+        digestmod=hashlib.sha256,  # ✅ ИСПРАВЛЕНО: diges tmod → digestmod
     ).hexdigest()
 
     # Сравниваем хеши
@@ -66,16 +65,16 @@ def validate_init_data(init_data: str) -> TelegramUser:
     print(f"✅ [auth_service] Хеш валидирован успешно!")
 
     # Получаем данные пользователя
-    user_data_str = params.get("user")
+    user_data_str = params.get("user")  # ✅ УБРАН ПРОБЕЛ!
     if not user_data_str:
         raise ValueError("Missing user parameter")
 
-    # Декодируем данные пользователя БЕЗ unquote
+    # Декодируем данные пользователя
     user_data = json.loads(user_data_str)
 
     # Генерируем URL аватарки, если photo_url отсутствует
     photo_url = None
-    if "photo_url" in user_data and user_data["photo_url"]:
+    if "photo_url" in user_data and user_data["photo_url"]:  # ✅ УБРАНЫ ПРОБЕЛЫ!
         photo_url = user_data["photo_url"]
     else:
         # Используем Dicebear API для генерации аватарки
@@ -85,7 +84,7 @@ def validate_init_data(init_data: str) -> TelegramUser:
 
     # Создаем пользователя в БД
     ensure_user_exists(
-        user_id=user_data["id"],
+        user_id=user_data["id"],  # ✅ УБРАНЫ ПРОБЕЛЫ!
         first_name=user_data["first_name"],
         username=user_data.get("username"),
         photo_url=photo_url

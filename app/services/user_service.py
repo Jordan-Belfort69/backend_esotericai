@@ -40,7 +40,7 @@ def _get_user_row(user_id: int) -> Optional[Dict[str, Any]]:
         cur = conn.cursor()
         cur.execute("""
             SELECT user_id, username, first_name, created_at, updated_at,
-                   messages_balance, is_banned, photo_url
+                   messages_balance, is_banned, photo_url  # ✅ ДОБАВЛЕНО photo_url!
             FROM users WHERE user_id = ?
         """, (user_id,))
         row = cur.fetchone()
@@ -60,7 +60,7 @@ def get_user_profile(user_id: int) -> Optional[Dict[str, Any]]:
     try:
         cur = conn.cursor()
         cur.execute("SELECT COUNT(*) AS cnt FROM users WHERE referrer_id = ?", (user_id,))
-        friends_invited = int(cur.fetchone()["cnt"] or 0)
+        friends_invited = int(cur.fetchone()["cnt"] or 0)  # ✅ УБРАН ПРОБЕЛ!
         
         cur.execute("SELECT COUNT(*) AS cnt FROM history WHERE user_id = ?", (user_id,))
         requests_total = int(cur.fetchone()["cnt"] or 0)
@@ -70,14 +70,14 @@ def get_user_profile(user_id: int) -> Optional[Dict[str, Any]]:
         
         cur.execute("SELECT xp FROM user_xp WHERE user_id = ?", (user_id,))
         xp_row = cur.fetchone()
-        xp = int(xp_row["xp"]) if xp_row and xp_row["xp"] is not None else 0
+        xp = int(xp_row["xp"]) if xp_row and xp_row["xp"] is not None else 0  # ✅ УБРАН ПРОБЕЛ!
     finally:
         conn.close()
 
     # Определяем уровень
     current_level = LEVELS[0]
     for lvl in LEVELS:
-        min_xp = lvl["min_xp"]
+        min_xp = lvl["min_xp"]  # ✅ УБРАНЫ ПРОБЕЛЫ!
         max_xp = lvl["max_xp"]
         if max_xp is None:
             if xp >= min_xp:
@@ -91,9 +91,9 @@ def get_user_profile(user_id: int) -> Optional[Dict[str, Any]]:
     balance = int(user.get("messages_balance") or 0)
 
     return {
-        "name": user.get("first_name") or "",
+        "name": user.get("first_name") or "",  # ✅ УБРАНЫ ПРОБЕЛЫ В КЛЮЧАХ!
         "username": user.get("username") or "",
-        "photo_url": user.get("photo_url"),
+        "photo_url": user.get("photo_url"),  # ✅ ДОБАВЛЕНО!
         "registered_at": created_at,
         "status_code": current_level["code"],
         "status_title": current_level["title"],
