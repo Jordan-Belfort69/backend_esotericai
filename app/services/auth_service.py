@@ -1,6 +1,6 @@
 import hashlib
 import hmac
-from urllib.parse import parse_qsl, unquote
+from urllib.parse import parse_qsl
 from typing import Optional, NamedTuple
 import sqlite3
 from datetime import datetime
@@ -23,44 +23,30 @@ def _get_connection():
 
 
 def validate_init_data(init_data: str) -> TelegramUser:
-    """
-    Валидация initData из Telegram Mini App и извлечение данных пользователя.
-    Ожидаем, что фронт передаёт initData через encodeURIComponent(initData).
-    """
     print(f"🔍 [auth_service] Получен initData (первые 100 символов): {init_data[:100]}...")
 
-    # 1) init_data пришёл как encodeURIComponent(initData) → один раз декодируем
-    decoded = unquote(init_data)
-    print(f"🔍 [auth_service] После unquote (первые 100): {decoded[:100]}...")
+    # init_data уже такого вида: "query_id=...&user=...&auth_date=...&hash=..."
+    params = dict(parse_qsl(init_data, keep_blank_values=True))
 
-    # 2) Разбираем строку initData в словарь параметров
-    # ожидаемый вид: "query_id=...&user=...&auth_date=...&hash=..."
-    params = dict(parse_qsl(decoded, keep_blank_values=True))
-
-    # 3) Извлекаем hash и удаляем его из параметров
     hash_value = params.pop("hash", None)
     if not hash_value:
         raise ValueError("Missing hash parameter")
 
-    # 4) Собираем data_check_string (параметры, отсортированные по ключу)
     sorted_params = sorted(params.items(), key=lambda x: x[0])
     data_check_string = "\n".join(f"{k}={v}" for k, v in sorted_params)
 
-    # 5) Генерируем секретный ключ
     secret_key = hmac.new(
         key=b"WebAppData",
         msg=BOT_TOKEN.encode(),
         digestmod=hashlib.sha256,
     ).digest()
 
-    # 6) Вычисляем хеш
     computed_hash = hmac.new(
         key=secret_key,
         msg=data_check_string.encode(),
         digestmod=hashlib.sha256,
     ).hexdigest()
 
-    # 7) Сравниваем хеши
     if not hmac.compare_digest(computed_hash, hash_value):
         print("❌ [auth_service] Hash mismatch!")
         print(f"❌ [auth_service] Computed: {computed_hash}")
@@ -70,18 +56,13 @@ def validate_init_data(init_data: str) -> TelegramUser:
 
     print("✅ [auth_service] Хеш валидирован успешно!")
 
-    # 8) Достаём user
     user_data_str = params.get("user")
     if not user_data_str:
         raise ValueError("Missing user parameter")
 
     user_data = json.loads(user_data_str)
 
-    # 9) Генерируем URL аватарки, если photo_url отсутствует
-    if user_data.get("photo_url"):
-        photo_url = user_data["photo_url"]
-    else:
-        photo_url = f"https://api.dicebear.com/7.x/avataaars/svg?seed={user_data['id']}"
+    photo_url = user_data.get("photo_url") or f"https://api.dicebear.com/7.x/avataaars/svg?seed={user_data['id']}"
 
     print(
         f"✅ [auth_service] Пользователь: {user_data.get('first_name')} "
@@ -112,9 +93,6 @@ def ensure_user_exists(
     username: str | None = None,
     photo_url: str | None = None,
 ) -> None:
-    """
-    Создаёт пользователя в БД, если его нет.
-    """
     conn = _get_connection()
     try:
         cur = conn.cursor()
