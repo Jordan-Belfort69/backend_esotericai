@@ -21,10 +21,10 @@ from app.services.auth_service import validate_init_data
 
 app = FastAPI(title="EsotericAI Backend v3")
 
-# CORS — временно максимально широкий, чтобы не мешал отладке
+# CORS — максимально широкий для отладки
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],          # можно сузить позже до своего домена
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -34,7 +34,11 @@ app.add_middleware(
 @app.middleware("http")
 async def validate_telegram_init_data(request: Request, call_next):
     # Пути, куда можно ходить без initData
-    public_paths = {"/api/health", "/health"}
+    public_paths = {
+        "/health",
+        "/api/health",
+        "/api/tasks/claim",   # временно не проверяем initData для claim
+    }
 
     # 1. Пропускаем preflight-запросы OPTIONS без проверки initData
     if request.method == "OPTIONS":
