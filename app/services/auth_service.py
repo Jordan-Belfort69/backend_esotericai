@@ -101,44 +101,29 @@ def ensure_user_exists(
     username: str | None = None,
     photo_url: str | None = None,
 ) -> None:
-    """
-    Создаёт пользователя в БД, если его нет, и аккуратно обновляет данные.
-    Не затирает существующую photo_url, если приходит NULL.
-    """
-    print(f"📝 ensure_user_exists START: user_id={user_id}, first_name={first_name}, username={username}, photo_url={photo_url}")
     conn = _get_connection()
     try:
         cur = conn.cursor()
-
-        cur.execute("PRAGMA table_info(users)")
-        cols = cur.fetchall()
-        print("🧩 [ensure_user_exists] users columns:", cols)
-
-        try:
-            cur.execute(
-                """
-                INSERT INTO users (
-                    user_id, first_name, username, created_at, updated_at,
-                    messages_balance, photo_url
-                ) VALUES (?, ?, ?, ?, ?, 0, ?)
-                ON CONFLICT(user_id) DO UPDATE SET
-                    username = excluded.username,
-                    updated_at = excluded.updated_at,
-                    photo_url = COALESCE(excluded.photo_url, users.photo_url)
-                """,
-                (
-                    user_id,
-                    first_name,
-                    username,
-                    datetime.utcnow().isoformat(),
-                    datetime.utcnow().isoformat(),
-                    photo_url,
-                ),
-            )
-            conn.commit()
-            print("✅ ensure_user_exists COMMIT for user_id", user_id)
-        except Exception as e:
-            conn.rollback()
-            print("❌ ensure_user_exists ERROR:", repr(e))
+        cur.execute(
+            """
+            INSERT INTO users (
+                user_id, first_name, username, created_at, updated_at,
+                messages_balance, photo_url
+            ) VALUES (?, ?, ?, ?, ?, 0, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                username   = excluded.username,
+                updated_at = excluded.updated_at,
+                photo_url  = COALESCE(excluded.photo_url, users.photo_url)
+            """,
+            (
+                user_id,
+                first_name,
+                username,
+                datetime.utcnow().isoformat(),
+                datetime.utcnow().isoformat(),
+                photo_url,
+            ),
+        )
+        conn.commit()
     finally:
         conn.close()
