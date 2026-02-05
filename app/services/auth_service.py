@@ -1,6 +1,6 @@
 import hashlib
 import hmac
-from urllib.parse import parse_qsl, unquote
+from urllib.parse import parse_qsl
 from typing import Optional, NamedTuple
 import sqlite3
 from datetime import datetime
