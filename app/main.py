@@ -33,45 +33,21 @@ app.add_middleware(
 
 @app.middleware("http")
 async def validate_telegram_init_data(request: Request, call_next):
-    # Пути, куда можно ходить без initData
     public_paths = {
         "/health",
         "/api/health",
-        "/api/tasks/claim",   # временно не проверяем initData для claim
     }
 
-    # 1. Пропускаем preflight-запросы OPTIONS без проверки initData
+    # Пропускаем preflight OPTIONS
     if request.method == "OPTIONS":
         return await call_next(request)
 
-    # 2. Пропускаем публичные пути без проверки
+    # Пропускаем публичные пути
     if request.url.path in public_paths:
         return await call_next(request)
 
-    # 3. Сначала пробуем взять initData из query-параметров (GET-запросы и т.п.)
+    # Берём initData только из query
     init_data = request.query_params.get("initData")
-
-    # 4. Если не нашли и это метод с телом — пробуем достать initData из JSON body
-    if not init_data and request.method in {"POST", "PUT", "PATCH", "DELETE"}:
-        try:
-            body_bytes = await request.body()
-            if body_bytes:
-                import json
-
-                body = json.loads(body_bytes.decode("utf-8"))
-                init_data = body.get("initData")
-
-                # Восстанавливаем request с тем же телом для дальнейших хэндлеров
-                async def receive():
-                    return {
-                        "type": "http.request",
-                        "body": body_bytes,
-                        "more_body": False,
-                    }
-
-                request = Request(request.scope, receive)
-        except Exception as e:
-            print(f"⚠️ [middleware] failed to read body for initData: {e}")
 
     if not init_data:
         return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
@@ -82,7 +58,6 @@ async def validate_telegram_init_data(request: Request, call_next):
         print(f"❌ [middleware] initData validation failed: {e}")
         return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
 
-    # кладём user_id в state для CurrentUser
     request.state.user_id = tg_user.user_id
     return await call_next(request)
 
