@@ -5,6 +5,9 @@ from app.services.user_balance_service import (
     change_messages_balance,
     add_user_xp,
 )
+from app.services.promocodes_service import assign_promocode
+from app.services.promo_pool_service import get_promo_from_pool
+
 
 # === КОНФИГ ЗАДАЧ (с текстами, как во фронте) ===
 TASK_CONFIG: Dict[str, Dict[str, Any]] = {
@@ -195,6 +198,7 @@ TASK_CONFIG: Dict[str, Dict[str, Any]] = {
     },
 }
 
+
 # === НАГРАДЫ ===
 TASK_REWARDS: Dict[str, List[Dict[str, Any]]] = {
     "D_DAILY": [{"type": "xp", "amount": 2}],
@@ -333,14 +337,21 @@ def _apply_task_reward(user_id: int, task_code: str) -> None:
     xp_delta = 0
     sms_delta = 0
 
+    # сначала считаем XP и SMS
     for r in rewards:
         if r["type"] == "xp":
             xp_delta += r["amount"]
         elif r["type"] == "sms":
             sms_delta += r["amount"]
-        elif r["type"] == "promocode":
-            # Промокоды пока не обрабатываем
-            pass
+
+    # затем обрабатываем промокоды
+    for r in rewards:
+        if r["type"] == "promocode":
+            percent = int(r["percent"])
+            code = get_promo_from_pool(percent)
+            if code:
+                assign_promocode(user_id, code, source=f"task_{task_code}")
+            # если кода нет в пуле, просто пропускаем (можно добавить лог)
 
     if xp_delta > 0:
         add_user_xp(user_id, xp_delta)
@@ -438,8 +449,6 @@ def get_tasks_by_category(user_id: int, category: str) -> List[Dict[str, Any]]:
         if claimed:
             status = "completed"
         elif progress >= target:
-            # технически награда уже будет выдана при increment_task_progress,
-            # но на случай гонок показываем как готовую
             status = "completed"
         elif progress > 0:
             status = "in_progress"
