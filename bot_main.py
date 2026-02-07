@@ -5,18 +5,20 @@ from typing import Dict, Any
 
 import aiohttp
 from aiogram import Bot, Dispatcher, F
-from aiogram.filters import CommandStart
+from aiogram.filters import CommandStart, Command, CommandObject
 from aiogram.types import (
     Message,
-    WebAppData,
+    ReplyKeyboardMarkup,
+    KeyboardButton,
+    WebAppInfo,
 )
 
 from core.config import BOT_TOKEN
 
-
 logging.basicConfig(level=logging.INFO)
 
 API_BASE = "https://web-production-4d81b.up.railway.app/api"
+APP_URL = "https://web-production-4d81b.up.railway.app"  # URL фронта
 
 # простое «хранилище состояния» в памяти: user_id -> mode/params
 user_states: Dict[int, Dict[str, Any]] = {}
@@ -38,70 +40,66 @@ async def call_tarot_api(user_id: int, spread_type: str, question: str) -> str:
 # ========== ХЭНДЛЕРЫ ==========
 
 
-async def on_start(message: Message):
-    print("on_start:", message.from_user.id)
-    await message.answer(
-        "Привет! Нажми кнопку Таро в мини‑аппе, выбери режим и вернись сюда, "
-        "чтобы задать вопрос."
-    )
-
-
-async def on_any_message(message: Message):
-    """
-    Универсальный хендлер: смотрим, что вообще приходит от мини‑аппа,
-    и если есть web_app_data — обрабатываем так, как планировали.
-    """
-    print("RAW MESSAGE:", message.model_dump())
-
-    if message.web_app_data is None:
-        # Это обычное сообщение (текст, фото и т.п.)
-        # Для текстов дальше срабатывает on_text, для фото — on_photo, для войса — on_voice.
-        return
-
-    # Если дошли сюда — у сообщения есть WebAppData
-    wad: WebAppData = message.web_app_data
-    print("on_web_app_data RAW:", wad)
-
-    try:
-        payload = json.loads(wad.data)
-    except Exception:
-        await message.answer("Не удалось прочитать данные из мини‑приложения.")
-        return
-
-    mode_type = payload.get("type")
+async def on_start(message: Message, command: CommandObject):
     user_id = message.from_user.id
-    print("on_web_app_data parsed:", user_id, mode_type, payload)
+    arg = (command.args or "").strip()
+    print("on_start:", user_id, "arg:", repr(arg))
 
-    if mode_type == "tarot_text":
+    if arg == "tarot_text":
         user_states[user_id] = {
             "mode": "tarot_text",
-            "cards": payload.get("cards", 1),
-            "deck": payload.get("deck", "rider"),
+            "cards": 1,
+            "deck": "rider",
         }
         await message.answer(
-            "Напишите подробно свой вопрос для расклада Таро."
+            "Вы выбрали текстовый расклад Таро.\n"
+            "Напишите подробно свой вопрос."
         )
 
-    elif mode_type == "tarot_voice":
+    elif arg == "tarot_voice":
         user_states[user_id] = {
             "mode": "tarot_voice",
         }
         await message.answer(
-            "Отправьте свой вопрос голосовым сообщением.\n"
-            "Голосовое должно быть до 60 секунд."
+            "Вы выбрали Таро по голосу.\n"
+            "Отправьте голосовое сообщение до 60 секунд с вашим вопросом."
         )
 
-    elif mode_type == "tarot_own_photo":
+    elif arg == "tarot_own_photo":
         user_states[user_id] = {
             "mode": "tarot_own_photo",
             "photo_file_id": None,
         }
         await message.answer(
-            "Сделайте одно фото своих карт при хорошем освещении и отправьте его сюда."
+            "Вы выбрали Таро со своими картами.\n"
+            "Сначала отправьте одно фото расклада при хорошем освещении."
         )
 
     else:
-        await message.answer("Неизвестный тип запроса из мини‑приложения.")
+        await message.answer(
+            "Привет! Нажми кнопку Таро в мини‑аппе, выбери режим и вернись сюда, "
+            "чтобы задать вопрос.\n\n"
+            "Также можно написать: tarot ваш вопрос — тогда я сделаю простой расклад на одну карту."
+        )
+
+
+async def on_app(message: Message):
+    """Присылаем свою WebApp‑кнопку, чтобы открыть мини‑аппу."""
+    kb = ReplyKeyboardMarkup(
+        keyboard=[
+            [
+                KeyboardButton(
+                    text="Открыть Esoteric AI",
+                    web_app=WebAppInfo(url=APP_URL),
+                )
+            ]
+        ],
+        resize_keyboard=True,
+    )
+    await message.answer(
+        "Нажми кнопку ниже, чтобы открыть мини‑приложение:",
+        reply_markup=kb,
+    )
 
 
 async def on_text(message: Message):
@@ -109,12 +107,20 @@ async def on_text(message: Message):
     state = user_states.get(user_id)
     print("on_text:", user_id, repr(message.text), "state:", state)
 
+    # Временная команда для отладки:
+    # если сообщение начинается с "tarot ", делаем расклад на одну карту
+    if message.text and message.text.startswith("tarot "):
+        question = message.text[len("tarot "):].strip()
+        text = await call_tarot_api(user_id, "one_card", question)
+        await message.answer("Тестовый расклад по текстовой команде:\n\n" + text)
+        return
+
     if not state:
         return  # обычный текст, не про Таро
 
     mode = state.get("mode")
 
-    # 1) Текстовый вопрос
+    # 1) Текстовый вопрос после выбора режима через start=tarot_text
     if mode == "tarot_text":
         question = message.text.strip()
         spread_type = "one_card" if state.get("cards") == 1 else "three_cards"
@@ -169,12 +175,14 @@ async def on_photo(message: Message):
 
 
 async def main():
-    bot = Bot(token=BOT_TOKEN)
+    bot = Bot(
+        token=BOT_TOKEN,
+        allowed_updates=["message", "edited_message"],
+    )
     dp = Dispatcher()
 
     dp.message.register(on_start, CommandStart())
-    # общий хендлер для всех сообщений — он сам проверяет web_app_data
-    dp.message.register(on_any_message)
+    dp.message.register(on_app, Command("app"))
     dp.message.register(on_voice, F.voice)
     dp.message.register(on_photo, F.photo)
     dp.message.register(on_text, F.text)
