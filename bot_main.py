@@ -191,18 +191,12 @@ async def on_photo(message: Message):
     )
 
 
-# Длительность показа "загрузки" перед выдачей гороскопа (секунды)
-HOROSCOPE_LOADING_SEC = 4
-# Опционально: file_id анимированного стикера "загрузка" из Telegram — если задан, бот отправит его
-LOADING_STICKER_FILE_ID = ""  # например "CAACAgIAAxkBAAI..." — можно получить, переслав стикер @userinfobot
-
-
 # Формат данных из Mini App (кнопка "Прочитать гороскоп" → отправка в чат):
 # { "type": "horoscope", "zodiac": "Овен" | "Телец" | ..., "scope": "none" | "career" | "money" | "love" | "health" }
 
 
 async def on_web_app_data(message: Message):
-    """Обработка данных из Mini App (гороскоп): знак + сфера → чат, затем бот выдаёт гороскоп."""
+    """Обработка данных из Mini App (гороскоп): знак + сфера → чат, бот присылает гороскоп (заглушка)."""
     print("WEB_APP_DATA RAW:", message.web_app_data)  # для отладки
 
     if not message.web_app_data or not message.web_app_data.data:
@@ -224,32 +218,17 @@ async def on_web_app_data(message: Message):
         await message.answer("Не удалось определить знак зодиака.")
         return
 
-    chat_id = message.chat.id
-    user_id = message.from_user.id
-
-    # 3–5 сек индикатор загрузки: анимированный стикер или "печатает..."
-    if LOADING_STICKER_FILE_ID:
-        loading_msg = await message.bot.send_sticker(chat_id, sticker=LOADING_STICKER_FILE_ID)
-    else:
-        await message.bot.send_chat_action(chat_id, "typing")
-
-    # Запрос к API и минимальная задержка — параллельно
-    api_task = asyncio.create_task(call_horoscope_api(user_id, zodiac, scope))
-    for _ in range(HOROSCOPE_LOADING_SEC):
-        await asyncio.sleep(1)
-        if not LOADING_STICKER_FILE_ID:
-            await message.bot.send_chat_action(chat_id, "typing")
-
-    text = await api_task
-
-    # Убираем стикер загрузки, если отправляли
-    if LOADING_STICKER_FILE_ID and loading_msg:
+    try:
+        text = await call_horoscope_api(message.from_user.id, zodiac, scope)
+        await message.answer(text)
+    except Exception as e:
+        logging.exception("Horoscope handler error: %s", e)
         try:
-            await message.bot.delete_message(chat_id, loading_msg.message_id)
+            await message.answer(
+                "Не удалось получить гороскоп. Попробуйте позже или напишите /start."
+            )
         except Exception:
             pass
-
-    await message.answer(text)
 
 
 # ========== ЗАПУСК ==========
