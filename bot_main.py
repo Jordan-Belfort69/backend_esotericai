@@ -27,8 +27,7 @@ user_states: Dict[int, Dict[str, Any]] = {}
 async def call_tarot_api(user_id: int, spread_type: str, question: str) -> str:
     """Вызывает твой /api/tarot и возвращает текст расклада."""
     async with aiohttp.ClientSession() as session:
-        # ⚠️ ВАЖНО: бекенд сейчас авторизует по initData.
-        # Здесь для простоты пробрасываем user_id через query-параметр.
+        # здесь по-прежнему пробрасываем user_id через query (если сделаешь tarot-bot — можно поменять)
         url = f"{API_BASE}/tarot?user_id={user_id}"
         payload = {
             "spread_type": spread_type,
@@ -40,9 +39,9 @@ async def call_tarot_api(user_id: int, spread_type: str, question: str) -> str:
 
 
 async def call_horoscope_api(user_id: int, zodiac: str, scope: str) -> str:
-    """Вызывает /api/horoscope и возвращает текст гороскопа."""
+    """Вызывает /api/horoscope-bot и возвращает текст гороскопа."""
     async with aiohttp.ClientSession() as session:
-        url = f"{API_BASE}/horoscope?user_id={user_id}"
+        url = f"{API_BASE}/horoscope-bot?user_id={user_id}"
         payload = {
             "zodiac": zodiac,
             "scope": scope,
@@ -188,12 +187,15 @@ async def on_photo(message: Message):
 
 async def on_web_app_data(message: Message):
     """Обработка данных из Mini App (гороскоп)."""
+    print("WEB_APP_DATA RAW:", message.web_app_data)  # для отладки
+
     if not message.web_app_data or not message.web_app_data.data:
         return
 
     try:
         data = json.loads(message.web_app_data.data)
-    except Exception:
+    except Exception as e:
+        logging.warning("Failed to parse web_app_data: %s", e)
         return
 
     if data.get("type") != "horoscope":
@@ -206,7 +208,7 @@ async def on_web_app_data(message: Message):
         await message.answer("Не удалось определить знак зодиака.")
         return
 
-    # Лёгкая анимация ожидания
+    # Лёгкая анимация ожидания (можно заменить на стикер)
     await message.bot.send_chat_action(message.chat.id, "typing")
 
     text = await call_horoscope_api(message.from_user.id, zodiac, scope)
@@ -219,7 +221,7 @@ async def on_web_app_data(message: Message):
 async def main():
     bot = Bot(
         token=BOT_TOKEN,
-        allowed_updates=["message", "edited_message"],
+        # без allowed_updates, чтобы бот получал web_app_data
     )
     dp = Dispatcher()
 

@@ -18,7 +18,6 @@ from app.api.horoscope import router as horoscope_router
 from app.api.tarot import router as tarot_router
 from app.services.auth_service import validate_init_data
 
-
 app = FastAPI(title="EsotericAI Backend v3")
 
 # CORS — максимально широкий для отладки
@@ -36,6 +35,8 @@ async def validate_telegram_init_data(request: Request, call_next):
     public_paths = {
         "/health",
         "/api/health",
+        "/api/horoscope-bot",  # бот ходит сюда без initData
+        "/api/tarot-bot",      # задел под будущее, если понадобится
     }
 
     # Пропускаем preflight OPTIONS
