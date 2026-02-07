@@ -27,7 +27,9 @@ user_states: Dict[int, Dict[str, Any]] = {}
 async def call_tarot_api(user_id: int, spread_type: str, question: str) -> str:
     """Вызывает твой /api/tarot и возвращает текст расклада."""
     async with aiohttp.ClientSession() as session:
-        url = f"{API_BASE}/tarot"
+        # ⚠️ ВАЖНО: бекенд сейчас авторизует по initData.
+        # Здесь для простоты пробрасываем user_id через query-параметр.
+        url = f"{API_BASE}/tarot?user_id={user_id}"
         payload = {
             "spread_type": spread_type,
             "question": question,
@@ -35,6 +37,19 @@ async def call_tarot_api(user_id: int, spread_type: str, question: str) -> str:
         async with session.post(url, json=payload) as resp:
             data = await resp.json()
             return data.get("text", "Не удалось получить расклад.")
+
+
+async def call_horoscope_api(user_id: int, zodiac: str, scope: str) -> str:
+    """Вызывает /api/horoscope и возвращает текст гороскопа."""
+    async with aiohttp.ClientSession() as session:
+        url = f"{API_BASE}/horoscope?user_id={user_id}"
+        payload = {
+            "zodiac": zodiac,
+            "scope": scope,
+        }
+        async with session.post(url, json=payload) as resp:
+            data = await resp.json()
+            return data.get("text", "Не удалось получить гороскоп.")
 
 
 # ========== ХЭНДЛЕРЫ ==========
@@ -171,6 +186,33 @@ async def on_photo(message: Message):
     )
 
 
+async def on_web_app_data(message: Message):
+    """Обработка данных из Mini App (гороскоп)."""
+    if not message.web_app_data or not message.web_app_data.data:
+        return
+
+    try:
+        data = json.loads(message.web_app_data.data)
+    except Exception:
+        return
+
+    if data.get("type") != "horoscope":
+        return
+
+    zodiac = data.get("zodiac")
+    scope = data.get("scope", "none")
+
+    if not zodiac:
+        await message.answer("Не удалось определить знак зодиака.")
+        return
+
+    # Лёгкая анимация ожидания
+    await message.bot.send_chat_action(message.chat.id, "typing")
+
+    text = await call_horoscope_api(message.from_user.id, zodiac, scope)
+    await message.answer(text)
+
+
 # ========== ЗАПУСК ==========
 
 
@@ -186,6 +228,7 @@ async def main():
     dp.message.register(on_voice, F.voice)
     dp.message.register(on_photo, F.photo)
     dp.message.register(on_text, F.text)
+    dp.message.register(on_web_app_data, F.web_app_data)
 
     await dp.start_polling(bot)
 
