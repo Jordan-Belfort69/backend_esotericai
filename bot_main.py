@@ -47,7 +47,13 @@ async def call_horoscope_api(user_id: int, zodiac: str, scope: str) -> str:
             "scope": scope,
         }
         async with session.post(url, json=payload) as resp:
-            data = await resp.json()
+            print("HOROSCOPE API STATUS:", resp.status)
+            body = await resp.text()
+            print("HOROSCOPE API BODY:", body)
+            try:
+                data = json.loads(body)
+            except Exception:
+                return "Не удалось получить гороскоп (ошибка формата ответа)."
             return data.get("text", "Не удалось получить гороскоп.")
 
 
@@ -185,8 +191,18 @@ async def on_photo(message: Message):
     )
 
 
+# Длительность показа "загрузки" перед выдачей гороскопа (секунды)
+HOROSCOPE_LOADING_SEC = 4
+# Опционально: file_id анимированного стикера "загрузка" из Telegram — если задан, бот отправит его
+LOADING_STICKER_FILE_ID = ""  # например "CAACAgIAAxkBAAI..." — можно получить, переслав стикер @userinfobot
+
+
+# Формат данных из Mini App (кнопка "Прочитать гороскоп" → отправка в чат):
+# { "type": "horoscope", "zodiac": "Овен" | "Телец" | ..., "scope": "none" | "career" | "money" | "love" | "health" }
+
+
 async def on_web_app_data(message: Message):
-    """Обработка данных из Mini App (гороскоп)."""
+    """Обработка данных из Mini App (гороскоп): знак + сфера → чат, затем бот выдаёт гороскоп."""
     print("WEB_APP_DATA RAW:", message.web_app_data)  # для отладки
 
     if not message.web_app_data or not message.web_app_data.data:
@@ -208,15 +224,37 @@ async def on_web_app_data(message: Message):
         await message.answer("Не удалось определить знак зодиака.")
         return
 
-    # Лёгкая анимация ожидания (можно заменить на стикер)
-    await message.bot.send_chat_action(message.chat.id, "typing")
+    chat_id = message.chat.id
+    user_id = message.from_user.id
 
-    text = await call_horoscope_api(message.from_user.id, zodiac, scope)
+    # 3–5 сек индикатор загрузки: анимированный стикер или "печатает..."
+    if LOADING_STICKER_FILE_ID:
+        loading_msg = await message.bot.send_sticker(chat_id, sticker=LOADING_STICKER_FILE_ID)
+    else:
+        await message.bot.send_chat_action(chat_id, "typing")
+
+    # Запрос к API и минимальная задержка — параллельно
+    api_task = asyncio.create_task(call_horoscope_api(user_id, zodiac, scope))
+    for _ in range(HOROSCOPE_LOADING_SEC):
+        await asyncio.sleep(1)
+        if not LOADING_STICKER_FILE_ID:
+            await message.bot.send_chat_action(chat_id, "typing")
+
+    text = await api_task
+
+    # Убираем стикер загрузки, если отправляли
+    if LOADING_STICKER_FILE_ID and loading_msg:
+        try:
+            await message.bot.delete_message(chat_id, loading_msg.message_id)
+        except Exception:
+            pass
+
     await message.answer(text)
 
 
 # ========== ЗАПУСК ==========
-
+async def log_any_message(message: Message):
+    print("ANY MESSAGE:", message)
 
 async def main():
     bot = Bot(
@@ -225,6 +263,7 @@ async def main():
     )
     dp = Dispatcher()
 
+    # Сначала специфичные хэндлеры (иначе log_any_message с F() перехватит всё, в т.ч. web_app_data)
     dp.message.register(on_start, CommandStart())
     dp.message.register(on_app, Command("app"))
     dp.message.register(on_voice, F.voice)
@@ -232,8 +271,9 @@ async def main():
     dp.message.register(on_text, F.text)
     dp.message.register(on_web_app_data, F.web_app_data)
 
-    await dp.start_polling(bot)
+    dp.message.register(log_any_message, F())  # лог всего остального
 
+    await dp.start_polling(bot)
 
 if __name__ == "__main__":
     asyncio.run(main())
