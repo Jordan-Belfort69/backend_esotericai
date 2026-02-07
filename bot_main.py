@@ -65,6 +65,23 @@ async def on_start(message: Message, command: CommandObject):
     arg = (command.args or "").strip()
     print("on_start:", user_id, "arg:", repr(arg))
 
+    # Гороскоп: из веб-аппа переход по ссылке t.me/БОТ?start=horoscope_знак_сфера
+    if arg.startswith("horoscope_"):
+        rest = arg[len("horoscope_"):].strip()
+        parts = rest.split("_", 1)
+        zodiac = (parts[0] or "").strip()
+        scope = (parts[1] or "none").strip() if len(parts) > 1 else "none"
+        if zodiac:
+            try:
+                text = await call_horoscope_api(user_id, zodiac, scope)
+                await message.answer(text)
+            except Exception as e:
+                logging.exception("Horoscope on_start error: %s", e)
+                await message.answer("Не удалось получить гороскоп. Попробуйте позже.")
+        else:
+            await message.answer("Не удалось определить знак зодиака.")
+        return
+
     if arg == "tarot_text":
         user_states[user_id] = {
             "mode": "tarot_text",
