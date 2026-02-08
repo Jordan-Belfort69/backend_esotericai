@@ -1,3 +1,5 @@
+# bot_main.py
+
 import asyncio
 import json
 import logging
@@ -31,7 +33,6 @@ user_states: Dict[int, Dict[str, Any]] = {}
 async def call_tarot_api(user_id: int, spread_type: str, question: str) -> str:
     """Вызывает твой /api/tarot и возвращает текст расклада."""
     async with aiohttp.ClientSession() as session:
-        # здесь по-прежнему пробрасываем user_id через query (если сделаешь tarot-bot — можно поменять)
         url = f"{API_BASE}/tarot?user_id={user_id}"
         payload = {
             "spread_type": spread_type,
@@ -62,7 +63,6 @@ async def call_horoscope_api(user_id: int, zodiac: str, scope: str) -> str:
 
 
 # ========== ХЭНДЛЕРЫ ==========
-
 
 async def on_start(message: Message, command: CommandObject):
     user_id = message.from_user.id
@@ -215,9 +215,8 @@ async def on_photo(message: Message):
 # Формат данных из Mini App (кнопка "Прочитать гороскоп" → отправка в чат):
 # { "type": "horoscope", "zodiac": "Овен" | "Телец" | ..., "scope": "none" | "career" | "money" | "love" | "health" }
 
-
 async def on_web_app_data(message: Message):
-    """Обработка данных из Mini App (гороскоп): знак + сфера → чат, бот присылает гороскоп (заглушка)."""
+    """Обработка данных из Mini App (гороскоп): знак + сфера → чат, бот присылает гороскоп."""
     print("WEB_APP_DATA RAW:", message.web_app_data)  # для отладки
 
     if not message.web_app_data or not message.web_app_data.data:
@@ -253,6 +252,7 @@ async def on_web_app_data(message: Message):
 
 
 # ========== СОВЕТ ДНЯ: ОБРАБОТКА НАЖАТИЯ КНОПОК 1/2/3 ==========
+
 def _get_daily_advice_cards():
     try:
         from app.data.daily_advice_cards import DAILY_ADVICE_CARDS, get_card_image_path
@@ -263,7 +263,7 @@ def _get_daily_advice_cards():
 
 
 async def on_advice_callback(callback: CallbackQuery):
-    """При нажатии на кнопку 1, 2 или 3 — отправляем рандомную карту и её описание (картинка отдельно, текст отдельно)."""
+    """При нажатии на кнопку 1, 2 или 3 — отправляем рандомную карту и её описание."""
     await callback.answer()
     user_id = callback.from_user.id
     first_name = (callback.from_user.first_name or "Друг").strip()
@@ -285,14 +285,18 @@ async def on_advice_callback(callback: CallbackQuery):
     photo = FSInputFile(card_path)
     await callback.message.answer_photo(photo=photo, caption=card["title"])
 
-    # Затем текст отдельным сообщением (как на скриншоте)
+    # Затем текст отдельным сообщением
     text = f"Уважаемый(ая) {first_name},\n\n{card['description']}"
     await callback.message.answer(text)
 
 
-# ========== ЗАПУСК ==========
+# ========== ЛОГ ВСЕХ СООБЩЕНИЙ ==========
+
 async def log_any_message(message: Message):
     print("ANY MESSAGE:", message)
+
+
+# ========== ЗАПУСК БОТА (ИСПОЛЬЗУЕТСЯ ИЗ run_api.py) ==========
 
 async def main():
     bot = Bot(
@@ -301,7 +305,7 @@ async def main():
     )
     dp = Dispatcher()
 
-    # Сначала специфичные хэндлеры (иначе log_any_message с F() перехватит всё, в т.ч. web_app_data)
+    # порядок регистрации важен: сначала специфичные хэндлеры
     dp.message.register(on_start, CommandStart())
     dp.message.register(on_app, Command("app"))
     dp.message.register(on_voice, F.voice)
@@ -309,12 +313,17 @@ async def main():
     dp.message.register(on_text, F.text)
     dp.message.register(on_web_app_data, F.web_app_data)
 
-    # Совет дня: инлайн-кнопки 1, 2, 3
+    # Совет дня: инлайн‑кнопки 1, 2, 3
     dp.callback_query.register(on_advice_callback, F.data.startswith("advice_"))
 
-    dp.message.register(log_any_message, F())  # лог всего остального
+    # Лог всего остального
+    dp.message.register(log_any_message, F())
 
     await dp.start_polling(bot)
 
-if __name__ == "__main__":
-    asyncio.run(main())
+
+# ВАЖНО: больше НЕ запускаем бота напрямую.
+# Его будет стартовать run_api.py через эту функцию.
+
+async def start_bot():
+    await main()
