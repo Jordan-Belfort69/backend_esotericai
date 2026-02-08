@@ -25,8 +25,68 @@ def init_daily_tip_table() -> None:
         )
         """
     )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS advice_sent_log (
+            user_id INTEGER NOT NULL,
+            sent_date TEXT NOT NULL,
+            PRIMARY KEY (user_id, sent_date)
+        )
+        """
+    )
     conn.commit()
     conn.close()
+
+
+def was_advice_sent_today(user_id: int, date_str: str) -> bool:
+    """Проверяет, отправляли ли уже совет дня этому пользователю в эту дату."""
+    conn = get_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT 1 FROM advice_sent_log WHERE user_id = ? AND sent_date = ?",
+            (user_id, date_str),
+        )
+        return cur.fetchone() is not None
+    finally:
+        conn.close()
+
+
+def mark_advice_sent(user_id: int, date_str: str) -> None:
+    """Отмечает, что совет дня отправлен пользователю в эту дату."""
+    conn = get_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT OR IGNORE INTO advice_sent_log (user_id, sent_date) VALUES (?, ?)",
+            (user_id, date_str),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_users_enabled_for_advice() -> list[tuple[int, str, str | None, str | None, str | None]]:
+    """Возвращает (user_id, first_name, time_from, time_to, timezone) для всех с включённым советом дня."""
+    conn = get_conn()
+    conn.row_factory = sqlite3.Row
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT s.user_id, COALESCE(u.first_name, 'Друг') AS first_name,
+                   s.time_from, s.time_to, s.timezone
+            FROM daily_tip_settings s
+            LEFT JOIN users u ON u.user_id = s.user_id
+            WHERE s.enabled = 1
+            """
+        )
+        return [
+            (row["user_id"], row["first_name"], row["time_from"], row["time_to"], row["timezone"])
+            for row in cur.fetchall()
+        ]
+    finally:
+        conn.close()
 
 
 def upsert_daily_tip_settings_db(

@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends
 from app.deps.current_user import CurrentUserDep
-from services.referrals_service import get_referrals_info
+from app.services.referrals_service import get_referrals_info
 
 router = APIRouter(prefix="/api")
 

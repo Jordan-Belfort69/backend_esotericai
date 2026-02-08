@@ -6,6 +6,11 @@ BASE_DIR = PROJECT_ROOT / "app"
 DB_PATH = BASE_DIR / "db" / "users.db"
 BOT_TOKEN = "8320610566:AAE1RlYeD7bpLaWaoZ9ZilVurR8JxsuJ7kM"
 
+# Совет дня: картинки (карты — в img/cards/, пост с 3 картами — в img/advice/)
+IMG_DIR = BASE_DIR / "img"
+CARDS_IMG_DIR = IMG_DIR / "cards"
+ADVICE_POST_IMAGE = IMG_DIR / "advice" / "post.png"
+
 # ✅ ИСПРАВЛЕНО: Убраны пробелы в ключах!
 LEVELS = [
     {"code": "spark", "title": "Искра", "min_xp": 0, "max_xp": 99},

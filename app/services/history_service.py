@@ -63,9 +63,9 @@ def list_history(user_id: int, limit: int = 20, offset: int = 0) -> List[Dict[st
             {
                 "id": row["id"],
                 "type": row["type"],
+                "title": row["question"] or "Запрос",
+                "preview": row["answer_short"] or "",
                 "created_at": row["created_at"],
-                "question": row["question"],
-                "answer_preview": row["answer_short"],
             }
             for row in rows
         ]
@@ -94,6 +94,7 @@ def get_history_detail(user_id: int, event_id: int) -> Optional[Dict[str, Any]]:
             "created_at": row["created_at"],
             "question": row["question"],
             "answer_full": row["answer_full"],
+            "full_text": row["answer_full"],
         }
     finally:
         conn.close()

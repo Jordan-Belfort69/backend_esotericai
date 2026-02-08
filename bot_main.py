@@ -1,6 +1,8 @@
 import asyncio
 import json
 import logging
+import random
+from pathlib import Path
 from typing import Dict, Any
 
 import aiohttp
@@ -8,9 +10,11 @@ from aiogram import Bot, Dispatcher, F
 from aiogram.filters import CommandStart, Command, CommandObject
 from aiogram.types import (
     Message,
+    CallbackQuery,
     ReplyKeyboardMarkup,
     KeyboardButton,
     WebAppInfo,
+    FSInputFile,
 )
 
 from core.config import BOT_TOKEN
@@ -248,6 +252,44 @@ async def on_web_app_data(message: Message):
             pass
 
 
+# ========== СОВЕТ ДНЯ: ОБРАБОТКА НАЖАТИЯ КНОПОК 1/2/3 ==========
+def _get_daily_advice_cards():
+    try:
+        from app.data.daily_advice_cards import DAILY_ADVICE_CARDS, get_card_image_path
+        return DAILY_ADVICE_CARDS, get_card_image_path
+    except Exception as e:
+        logging.warning("daily_advice_cards not available: %s", e)
+        return [], None
+
+
+async def on_advice_callback(callback: CallbackQuery):
+    """При нажатии на кнопку 1, 2 или 3 — отправляем рандомную карту и её описание (картинка отдельно, текст отдельно)."""
+    await callback.answer()
+    user_id = callback.from_user.id
+    first_name = (callback.from_user.first_name or "Друг").strip()
+
+    cards, get_card_image_path = _get_daily_advice_cards()
+    if not cards or not get_card_image_path:
+        await callback.message.answer("Совет дня временно недоступен. Попробуйте позже.")
+        return
+
+    card = random.choice(cards)
+    card_path = get_card_image_path(card)
+    if not card_path.exists():
+        await callback.message.answer(
+            f"Карта: {card['title']}\n\n{card['description']}"
+        )
+        return
+
+    # Сначала картинка отдельным сообщением
+    photo = FSInputFile(card_path)
+    await callback.message.answer_photo(photo=photo, caption=card["title"])
+
+    # Затем текст отдельным сообщением (как на скриншоте)
+    text = f"Уважаемый(ая) {first_name},\n\n{card['description']}"
+    await callback.message.answer(text)
+
+
 # ========== ЗАПУСК ==========
 async def log_any_message(message: Message):
     print("ANY MESSAGE:", message)
@@ -266,6 +308,9 @@ async def main():
     dp.message.register(on_photo, F.photo)
     dp.message.register(on_text, F.text)
     dp.message.register(on_web_app_data, F.web_app_data)
+
+    # Совет дня: инлайн-кнопки 1, 2, 3
+    dp.callback_query.register(on_advice_callback, F.data.startswith("advice_"))
 
     dp.message.register(log_any_message, F())  # лог всего остального
 
