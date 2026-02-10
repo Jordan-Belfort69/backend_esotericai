@@ -18,7 +18,9 @@ from app.api.horoscope import router as horoscope_router
 from app.api.tarot import router as tarot_router
 from app.services.auth_service import validate_init_data
 
+
 app = FastAPI(title="EsotericAI Backend v3")
+
 
 # CORS — максимально широкий для отладки
 app.add_middleware(
@@ -54,7 +56,7 @@ async def validate_telegram_init_data(request: Request, call_next):
         return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
 
     try:
-        tg_user = validate_init_data(init_data)
+        tg_user = await validate_init_data(init_data)
     except Exception as e:
         print(f"❌ [middleware] initData validation failed: {e}")
         return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
