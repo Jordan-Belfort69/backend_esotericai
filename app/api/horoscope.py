@@ -5,6 +5,7 @@ from typing import Literal
 from app.deps.current_user import CurrentUserDep
 from app.services.horoscope_service import create_horoscope_stub
 from app.services.history_service import log_event
+from app.services.tasks_service import increment_task_progress  # <-- добавили
 
 router = APIRouter(prefix="/api")
 
@@ -30,6 +31,9 @@ async def get_horoscope(
         question=f"{request_body.zodiac}/{request_body.scope}",
         answer_full=text,
     )
+
+    # ежедневный запрос из Mini App
+    await increment_task_progress(user_id, "D_REQ_DAILY")
 
     return {"text": text}
 
@@ -59,5 +63,8 @@ async def get_horoscope_bot(
         question=f"{request_body.zodiac}/{request_body.scope}",
         answer_full=text,
     )
+
+    # ежедневный запрос из обычного бота
+    await increment_task_progress(user_id, "D_REQ_DAILY")
 
     return {"text": text}

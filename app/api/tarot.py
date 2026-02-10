@@ -5,7 +5,7 @@ from typing import Literal
 from app.deps.current_user import CurrentUserDep
 from app.services.tarot_service import create_tarot_reading_stub
 from app.services.history_service import log_event
-
+from app.services.tasks_service import increment_task_progress  # <-- добавили
 
 router = APIRouter(prefix="/api")
 
@@ -34,5 +34,8 @@ async def get_tarot(
         question=f"{request.spread_type}/{request.question}",
         answer_full=text,
     )
+
+    # ежедневный запрос боту
+    await increment_task_progress(user_id, "D_REQ_DAILY")
 
     return {"text": text}
