@@ -20,7 +20,6 @@ from aiogram.types import (
 )
 
 from core.config import BOT_TOKEN
-from app.services.tasks_service import increment_task_progress  # <-- добавили импорт
 
 logging.basicConfig(level=logging.INFO)
 
@@ -70,12 +69,6 @@ async def on_start(message: Message, command: CommandObject):
     user_id = message.from_user.id
     arg = (command.args or "").strip()
     print("on_start:", user_id, "arg:", repr(arg))
-
-    # отмечаем «Ежедневный вход» для системы задач
-    try:
-        await increment_task_progress(user_id, "D_DAILY")
-    except Exception as e:
-        logging.exception("Failed to increment D_DAILY: %s", e)
 
     # Гороскоп: из веб-аппа переход по ссылке t.me/БОТ?start=horoscope_знак_сфера
     if arg.startswith("horoscope_"):

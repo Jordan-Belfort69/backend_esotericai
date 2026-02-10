@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, status
 from app.deps.current_user import CurrentUserDep
 from app.services.user_service import get_user_profile
+from app.services.tasks_service import increment_task_progress  # NEW
 
 router = APIRouter(prefix="/api")
 
@@ -12,6 +13,14 @@ async def get_me(
     """
     Возвращает профиль пользователя с полным статусом.
     """
+    # считаем вход в приложение (ежедневный вход)
+    try:
+        await increment_task_progress(user_id, "D_DAILY")
+    except Exception as e:
+        # не ломаем /me, если что-то пошло не так
+        import logging
+        logging.exception("Failed to increment D_DAILY in /api/me: %s", e)
+
     profile = await get_user_profile(user_id)
     if profile is None:
         raise HTTPException(
