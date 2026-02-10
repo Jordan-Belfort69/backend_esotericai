@@ -20,6 +20,7 @@ from aiogram.types import (
 )
 
 from core.config import BOT_TOKEN
+from app.services.tasks_service import increment_task_progress  # <-- добавили импорт
 
 logging.basicConfig(level=logging.INFO)
 
@@ -64,10 +65,17 @@ async def call_horoscope_api(user_id: int, zodiac: str, scope: str) -> str:
 
 # ========== ХЭНДЛЕРЫ ==========
 
+
 async def on_start(message: Message, command: CommandObject):
     user_id = message.from_user.id
     arg = (command.args or "").strip()
     print("on_start:", user_id, "arg:", repr(arg))
+
+    # отмечаем «Ежедневный вход» для системы задач
+    try:
+        await increment_task_progress(user_id, "D_DAILY")
+    except Exception as e:
+        logging.exception("Failed to increment D_DAILY: %s", e)
 
     # Гороскоп: из веб-аппа переход по ссылке t.me/БОТ?start=horoscope_знак_сфера
     if arg.startswith("horoscope_"):
@@ -215,6 +223,7 @@ async def on_photo(message: Message):
 # Формат данных из Mini App (кнопка "Прочитать гороскоп" → отправка в чат):
 # { "type": "horoscope", "zodiac": "Овен" | "Телец" | ..., "scope": "none" | "career" | "money" | "love" | "health" }
 
+
 async def on_web_app_data(message: Message):
     """Обработка данных из Mini App (гороскоп): знак + сфера → чат, бот присылает гороскоп."""
     print("WEB_APP_DATA RAW:", message.web_app_data)  # для отладки
@@ -252,6 +261,7 @@ async def on_web_app_data(message: Message):
 
 
 # ========== СОВЕТ ДНЯ: ОБРАБОТКА НАЖАТИЯ КНОПОК 1/2/3 ==========
+
 
 def _get_daily_advice_cards():
     try:
@@ -292,11 +302,13 @@ async def on_advice_callback(callback: CallbackQuery):
 
 # ========== ЛОГ ВСЕХ СООБЩЕНИЙ ==========
 
+
 async def log_any_message(message: Message):
     print("ANY MESSAGE:", message)
 
 
 # ========== ЗАПУСК БОТА (ИСПОЛЬЗУЕТСЯ ИЗ run_api.py) ==========
+
 
 async def main():
     bot = Bot(
@@ -324,6 +336,7 @@ async def main():
 
 # ВАЖНО: больше НЕ запускаем бота напрямую.
 # Его будет стартовать run_api.py через эту функцию.
+
 
 async def start_bot():
     await main()
