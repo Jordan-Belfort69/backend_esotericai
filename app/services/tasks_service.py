@@ -1,12 +1,17 @@
-import sqlite3
+# app/services/tasks_service.py
+
 from typing import List, Dict, Any
-from core.config import DB_PATH
+
+from sqlalchemy import select, update
+
 from app.services.user_balance_service import (
     change_messages_balance,
     add_user_xp,
 )
 from app.services.promocodes_service import assign_promocode
 from app.services.promo_pool_service import get_promo_from_pool
+from app.db.postgres import AsyncSessionLocal
+from app.db.models import UserTask
 
 
 # === КОНФИГ ЗАДАЧ (с текстами, как во фронте) ===
@@ -301,80 +306,69 @@ TASK_REWARDS: Dict[str, List[Dict[str, Any]]] = {
 }
 
 
-def _get_connection() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-
-def ensure_task_record(user_id: int, task_code: str) -> None:
+async def ensure_task_record(user_id: int, task_code: str) -> None:
     """Создаёт запись задачи, если её нет."""
     if task_code not in TASK_CONFIG:
         return
     progress_target = TASK_CONFIG[task_code]["progress_target"]
 
-    conn = _get_connection()
-    try:
-        cur = conn.cursor()
-        cur.execute(
-            """
-            INSERT INTO user_tasks (
-                user_id, task_code, progress_current, progress_target, reward_claimed
-            )
-            VALUES (?, ?, 0, ?, 0)
-            ON CONFLICT(user_id, task_code) DO NOTHING
-        """,
-            (user_id, task_code, progress_target),
+    async with AsyncSessionLocal() as session:
+        stmt = select(UserTask).where(
+            UserTask.user_id == user_id,
+            UserTask.task_code == task_code,
         )
-        conn.commit()
-    finally:
-        conn.close()
+        res = await session.scalars(stmt)
+        task = res.first()
+        if task is None:
+            task = UserTask(
+                user_id=user_id,
+                task_code=task_code,
+                progress_current=0,
+                progress_target=progress_target,
+                reward_claimed=False,
+            )
+            session.add(task)
+            await session.commit()
 
 
-def _apply_task_reward(user_id: int, task_code: str) -> None:
-    """Начисляет награды по задаче и помечает её как полученную (без возврата балансов)."""
+async def _apply_task_reward(user_id: int, task_code: str) -> None:
+    """Начисляет награды по задаче и помечает её как полученную."""
     rewards = TASK_REWARDS.get(task_code, [])
     xp_delta = 0
     sms_delta = 0
 
-    # сначала считаем XP и SMS
     for r in rewards:
         if r["type"] == "xp":
             xp_delta += r["amount"]
         elif r["type"] == "sms":
             sms_delta += r["amount"]
 
-    # затем обрабатываем промокоды
     for r in rewards:
         if r["type"] == "promocode":
             percent = int(r["percent"])
-            code = get_promo_from_pool(percent)
+            code = await get_promo_from_pool(percent)
             if code:
-                assign_promocode(user_id, code, source=f"task_{task_code}")
-            # если кода нет в пуле, просто пропускаем (можно добавить лог)
+                await assign_promocode(user_id, code, source=f"task_{task_code}")
 
     if xp_delta > 0:
-        add_user_xp(user_id, xp_delta)
+        await add_user_xp(user_id, xp_delta)
     if sms_delta > 0:
-        change_messages_balance(user_id, sms_delta)
+        await change_messages_balance(user_id, sms_delta)
 
-    conn = _get_connection()
-    try:
-        cur = conn.cursor()
-        cur.execute(
-            """
-            UPDATE user_tasks
-            SET reward_claimed = 1
-            WHERE user_id = ? AND task_code = ?
-        """,
-            (user_id, task_code),
+    async with AsyncSessionLocal() as session:
+        stmt = (
+            update(UserTask)
+            .where(
+                UserTask.user_id == user_id,
+                UserTask.task_code == task_code,
+            )
+            .values(reward_claimed=True)
         )
-        conn.commit()
-    finally:
-        conn.close()
+        await session.execute(stmt)
+        await session.commit()
 
 
-def increment_task_progress(user_id: int, task_code: str, delta: int = 1) -> None:
+async def increment_task_progress(user_id: int, task_code: str, delta: int = 1) -> None:
     """
     Увеличивает прогресс задачи и, если цель достигнута и награда ещё не выдана,
     автоматически начисляет её.
@@ -382,42 +376,41 @@ def increment_task_progress(user_id: int, task_code: str, delta: int = 1) -> Non
     if task_code not in TASK_CONFIG:
         return
 
-    ensure_task_record(user_id, task_code)
-    conn = _get_connection()
-    try:
-        cur = conn.cursor()
-        # Обновляем прогресс
-        cur.execute(
-            """
-            UPDATE user_tasks
-            SET progress_current = MIN(progress_current + ?, ?)
-            WHERE user_id = ? AND task_code = ?
-        """,
-            (delta, TASK_CONFIG[task_code]["progress_target"], user_id, task_code),
+    await ensure_task_record(user_id, task_code)
+
+    async with AsyncSessionLocal() as session:
+        target = TASK_CONFIG[task_code]["progress_target"]
+
+        stmt = (
+            update(UserTask)
+            .where(
+                UserTask.user_id == user_id,
+                UserTask.task_code == task_code,
+            )
+            .values(
+                progress_current=UserTask.progress_current + delta,
+                progress_target=target,
+            )
+            .returning(
+                UserTask.progress_current,
+                UserTask.progress_target,
+                UserTask.reward_claimed,
+            )
         )
-        conn.commit()
+        res = await session.execute(stmt)
+        row = res.first()
+        await session.commit()
 
-        # Проверяем, не пора ли выдать награду
-        cur.execute(
-            """
-            SELECT progress_current, progress_target, reward_claimed
-            FROM user_tasks
-            WHERE user_id = ? AND task_code = ?
-        """,
-            (user_id, task_code),
-        )
-        row = cur.fetchone()
-        if (
-            row
-            and not row["reward_claimed"]
-            and row["progress_current"] >= row["progress_target"]
-        ):
-            _apply_task_reward(user_id, task_code)
-    finally:
-        conn.close()
+    if not row:
+        return
+
+    progress_current, progress_target, reward_claimed = row
+
+    if (not reward_claimed) and progress_current >= progress_target:
+        await _apply_task_reward(user_id, task_code)
 
 
-def get_tasks_by_category(user_id: int, category: str) -> List[Dict[str, Any]]:
+async def get_tasks_by_category(user_id: int, category: str) -> List[Dict[str, Any]]:
     """Возвращает задачи категории в формате фронта."""
     tasks: List[Dict[str, Any]] = []
 
@@ -425,24 +418,21 @@ def get_tasks_by_category(user_id: int, category: str) -> List[Dict[str, Any]]:
         if cfg["category"] != category:
             continue
 
-        ensure_task_record(user_id, code)
+        await ensure_task_record(user_id, code)
 
-        conn = _get_connection()
-        try:
-            cur = conn.cursor()
-            cur.execute(
-                """
-                SELECT progress_current, reward_claimed
-                FROM user_tasks
-                WHERE user_id = ? AND task_code = ?
-            """,
-                (user_id, code),
+        async with AsyncSessionLocal() as session:
+            stmt = select(
+                UserTask.progress_current,
+                UserTask.reward_claimed,
+            ).where(
+                UserTask.user_id == user_id,
+                UserTask.task_code == code,
             )
-            row = cur.fetchone()
-            progress = row["progress_current"] if row else 0
-            claimed = bool(row and row["reward_claimed"])
-        finally:
-            conn.close()
+            res = await session.execute(stmt)
+            row = res.first()
+
+        progress = row[0] if row else 0
+        claimed = bool(row[1]) if row else False
 
         target = cfg["progress_target"]
 

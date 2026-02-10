@@ -1,11 +1,14 @@
+# auth_service.py
+
 import hashlib
 import hmac
 from urllib.parse import parse_qsl
 from typing import Optional, NamedTuple
-import sqlite3
 from datetime import datetime
 import json
-from core.config import BOT_TOKEN, DB_PATH
+
+from core.config import BOT_TOKEN
+from app.services.user_service import ensure_user_exists  # импорт async-функции
 
 
 class TelegramUser(NamedTuple):
@@ -18,45 +21,7 @@ class TelegramUser(NamedTuple):
     photo_url: Optional[str] = None
 
 
-def _get_connection():
-    return sqlite3.connect(DB_PATH)
-
-
-def ensure_user_exists(
-    user_id: int,
-    first_name: str,
-    username: str | None = None,
-    photo_url: str | None = None,
-) -> None:
-    conn = _get_connection()
-    try:
-        cur = conn.cursor()
-        cur.execute(
-            """
-            INSERT INTO users (
-                user_id, first_name, username, created_at, updated_at,
-                messages_balance, photo_url
-            ) VALUES (?, ?, ?, ?, ?, 0, ?)
-            ON CONFLICT(user_id) DO UPDATE SET
-                username   = excluded.username,
-                updated_at = excluded.updated_at,
-                photo_url  = excluded.photo_url
-            """,
-            (
-                user_id,
-                first_name,
-                username,
-                datetime.utcnow().isoformat(),
-                datetime.utcnow().isoformat(),
-                photo_url,
-            ),
-        )
-        conn.commit()
-    finally:
-        conn.close()
-
-
-def validate_init_data(init_data: str) -> TelegramUser:
+async def validate_init_data(init_data: str) -> TelegramUser:
     print(f"🔍 [auth_service] Получен initData (первые 100 символов): {init_data[:100]}...")
 
     # init_data вида: "query_id=...&user=...&auth_date=...&hash=..."
@@ -96,14 +61,17 @@ def validate_init_data(init_data: str) -> TelegramUser:
 
     user_data = json.loads(user_data_str)
 
-    photo_url = user_data.get("photo_url") or f"https://api.dicebear.com/7.x/avataaars/svg?seed={user_data['id']}"
+    photo_url = user_data.get("photo_url") or (
+        f"https://api.dicebear.com/7.x/avataaars/svg?seed={user_data['id']}"
+    )
 
     print(
         f"✅ [auth_service] Пользователь: {user_data.get('first_name')} "
         f"(id={user_data.get('id')}, photo_url={photo_url})"
     )
 
-    ensure_user_exists(
+    # создаём / обновляем пользователя в Neon
+    await ensure_user_exists(
         user_id=user_data["id"],
         first_name=user_data["first_name"],
         username=user_data.get("username"),

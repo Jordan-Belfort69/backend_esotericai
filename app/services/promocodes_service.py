@@ -1,81 +1,98 @@
 # app/services/promocodes_service.py
 
-import sqlite3
-from pathlib import Path
 from typing import List, Dict, Any, Optional
-from core.config import DB_PATH
+from datetime import datetime, timezone as dt_timezone
 
-def _get_connection() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy import func
 
-def take_promocode_from_pool(discount_percent: int) -> Optional[str]:
+from app.db.postgres import AsyncSessionLocal
+from app.db.models import PromoCode, UserPromocode
+
+
+async def take_promocode_from_pool(discount_percent: int) -> Optional[str]:
     """
     Берёт первый доступный (не выданный) промокод со скидкой `discount_percent`.
     """
-    conn = _get_connection()
-    try:
-        cur = conn.cursor()
-        cur.execute("""
-            SELECT pc.code
-            FROM promo_codes pc
-            LEFT JOIN user_promocodes up ON pc.code = up.code
-            WHERE pc.discount_percent = ?
-              AND pc.is_active = 1
-              AND up.code IS NULL
-            ORDER BY pc.code
-            LIMIT 1
-        """, (discount_percent,))
-        row = cur.fetchone()
-        return row["code"] if row else None
-    finally:
-        conn.close()
+    async with AsyncSessionLocal() as session:
+        # промокоды нужной скидки, активные и не истёкшие
+        base_stmt = (
+            select(PromoCode.code)
+            .where(
+                PromoCode.discount_percent == discount_percent,
+                PromoCode.is_active.is_(True),
+                PromoCode.expires_at > datetime.now(dt_timezone.utc),
+            )
+            .order_by(PromoCode.code)
+        )
 
-def get_promocodes_for_user(user_id: int) -> List[Dict[str, Any]]:
+        result = await session.execute(base_stmt)
+        codes = [row[0] for row in result.all()]
+        if not codes:
+            return None
+
+        # найдём первый код, который ещё не встречается в user_promocodes
+        for code in codes:
+            stmt_used = select(func.count()).select_from(UserPromocode).where(
+                UserPromocode.code == code
+            )
+            used_count = (await session.execute(stmt_used)).scalar_one()
+            if used_count == 0:
+                return code
+
+        return None
+
+
+async def get_promocodes_for_user(user_id: int) -> List[Dict[str, Any]]:
     """
     Возвращает список промокодов пользователя в формате для фронта.
     """
-    conn = _get_connection()
-    try:
-        cur = conn.cursor()
-        cur.execute("""
-            SELECT
-                pc.code,
-                pc.discount_percent,
-                pc.expires_at
-            FROM user_promocodes up
-            JOIN promo_codes pc ON pc.code = up.code
-            WHERE up.user_id = ?
-              AND pc.is_active = 1
-              AND pc.expires_at > datetime('now')
-            ORDER BY up.assigned_at DESC
-        """, (user_id,))
-        return [
-            {
-                "code": r["code"],
-                "discount": r["discount_percent"],
-                "expires_at": r["expires_at"],
-            }
-            for r in cur.fetchall()
-        ]
-    finally:
-        conn.close()
+    async with AsyncSessionLocal() as session:
+        stmt = (
+            select(
+                PromoCode.code,
+                PromoCode.discount_percent,
+                PromoCode.expires_at,
+            )
+            .join(UserPromocode, UserPromocode.code == PromoCode.code)
+            .where(
+                UserPromocode.user_id == user_id,
+                PromoCode.is_active.is_(True),
+                PromoCode.expires_at > datetime.now(dt_timezone.utc),
+            )
+            .order_by(UserPromocode.assigned_at.desc())
+        )
+        result = await session.execute(stmt)
+        rows = result.all()
 
-def assign_promocode(user_id: int, code: str, source: str) -> None:
+    return [
+        {
+            "code": r.code,
+            "discount": r.discount_percent,
+            "expires_at": r.expires_at.isoformat()
+            if isinstance(r.expires_at, datetime)
+            else r.expires_at,
+        }
+        for r in rows
+    ]
+
+
+async def assign_promocode(user_id: int, code: str, source: str) -> None:
     """
-    Выдаёт промокод пользователю.
+    Выдаёт промокод пользователю (idempotent, как INSERT OR IGNORE).
     """
-    from datetime import datetime
-    now = datetime.utcnow().isoformat()
-    conn = _get_connection()
-    try:
-        cur = conn.cursor()
-        cur.execute("""
-            INSERT OR IGNORE INTO user_promocodes 
-            (user_id, code, assigned_at, source)
-            VALUES (?, ?, ?, ?)
-        """, (user_id, code, now, source))
-        conn.commit()
-    finally:
-        conn.close()
+    now = datetime.now(dt_timezone.utc).isoformat()
+
+    async with AsyncSessionLocal() as session:
+        stmt = pg_insert(UserPromocode).values(
+            user_id=user_id,
+            code=code,
+            assigned_at=now,
+            source=source,
+        ).on_conflict_do_nothing(
+            index_elements=[UserPromocode.user_id, UserPromocode.code]
+        )
+
+        await session.execute(stmt)
+        await session.commit()

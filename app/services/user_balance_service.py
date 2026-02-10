@@ -1,62 +1,63 @@
-import sqlite3
-from pathlib import Path
+# app/services/user_balance_service.py
+
 from typing import Optional
-from core.config import DB_PATH
 
-def _get_connection() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+from sqlalchemy import select, update
+from sqlalchemy.exc import NoResultFound
 
-def get_messages_balance(user_id: int) -> int:
+from app.db.postgres import AsyncSessionLocal
+from app.db.models import User, UserXP
+
+
+async def get_messages_balance(user_id: int) -> int:
     """Возвращает текущий баланс сообщений пользователя."""
-    conn = _get_connection()
-    try:
-        cur = conn.cursor()
-        cur.execute("SELECT messages_balance FROM users WHERE user_id = ?", (user_id,))
-        row = cur.fetchone()
-        return int(row[0]) if row else 0
-    finally:
-        conn.close()
+    async with AsyncSessionLocal() as session:
+        stmt = select(User.messages_balance).where(User.user_id == user_id)
+        res = await session.execute(stmt)
+        row = res.first()
+        return int(row[0]) if row and row[0] is not None else 0
 
-def change_messages_balance(user_id: int, delta: int) -> None:
+
+async def change_messages_balance(user_id: int, delta: int) -> None:
     """Изменяет баланс сообщений пользователя на указанную величину."""
-    conn = _get_connection()
-    try:
-        cur = conn.cursor()
-        cur.execute("""
-            UPDATE users
-            SET messages_balance = messages_balance + ?
-            WHERE user_id = ?
-        """, (delta, user_id))
-        conn.commit()
-    finally:
-        conn.close()
+    if delta == 0:
+        return
 
-def get_user_xp(user_id: int) -> int:
+    async with AsyncSessionLocal() as session:
+        stmt = (
+            update(User)
+            .where(User.user_id == user_id)
+            .values(messages_balance=User.messages_balance + delta)
+        )
+        await session.execute(stmt)
+        await session.commit()
+
+
+async def get_user_xp(user_id: int) -> int:
     """Возвращает текущий XP пользователя."""
-    conn = _get_connection()
-    try:
-        cur = conn.cursor()
-        cur.execute("SELECT xp FROM user_xp WHERE user_id = ?", (user_id,))
-        row = cur.fetchone()
-        return int(row[0]) if row else 0
-    finally:
-        conn.close()
+    async with AsyncSessionLocal() as session:
+        stmt = select(UserXP.xp).where(UserXP.user_id == user_id)
+        res = await session.execute(stmt)
+        row = res.first()
+        return int(row[0]) if row and row[0] is not None else 0
 
-def add_user_xp(user_id: int, amount: int) -> None:
+
+async def add_user_xp(user_id: int, amount: int) -> None:
     """Добавляет указанный опыт пользователю."""
     if amount <= 0:
         return
-    conn = _get_connection()
-    try:
-        cur = conn.cursor()
-        cur.execute("""
-            INSERT INTO user_xp (user_id, xp)
-            VALUES (?, ?)
-            ON CONFLICT(user_id) DO UPDATE SET
-                xp = xp + excluded.xp
-        """, (user_id, amount))
-        conn.commit()
-    finally:
-        conn.close()
+
+    async with AsyncSessionLocal() as session:
+        # пробуем найти запись
+        stmt = select(UserXP).where(UserXP.user_id == user_id)
+        res = await session.scalars(stmt)
+        xp_row = res.first()
+
+        if xp_row is None:
+            # создаём новую запись
+            xp_row = UserXP(user_id=user_id, xp=amount)
+            session.add(xp_row)
+        else:
+            xp_row.xp = (xp_row.xp or 0) + amount
+
+        await session.commit()

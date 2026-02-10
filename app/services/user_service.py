@@ -1,85 +1,107 @@
-import sqlite3
+# user_service.py
+
 from datetime import datetime
 from typing import Optional, Dict, Any
-from core.config import DB_PATH, LEVELS
+
+from sqlalchemy import select, func
+
+from core.config import LEVELS
+from app.db.postgres import AsyncSessionLocal
+from app.db.models import User, History, UserTask, UserXP
 
 
-def _get_connection() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+async def ensure_user_exists(
+    user_id: int,
+    first_name: str,
+    username: str | None = None,
+    photo_url: str | None = None,
+) -> None:
+    """Создаёт пользователя, если его нет, или обновляет данные, если есть."""
+    async with AsyncSessionLocal() as session:
+        stmt = select(User).where(User.user_id == user_id)
+        result = await session.scalars(stmt)
+        user = result.first()
+
+        now_str = datetime.utcnow().isoformat()
+
+        if user is None:
+            user = User(
+                user_id=user_id,
+                first_name=first_name,
+                username=username,
+                created_at=now_str,
+                updated_at=now_str,
+                messages_balance=0,
+                photo_url=photo_url,
+            )
+            session.add(user)
+        else:
+            user.username = username
+            user.updated_at = now_str
+            user.photo_url = photo_url
+
+        await session.commit()
 
 
-def ensure_user_exists(user_id: int, first_name: str, username: str | None = None, photo_url: str | None = None) -> None:
-    """Создаёт пользователя, если его нет."""
-    conn = _get_connection()
-    try:
-        cur = conn.cursor()
-        cur.execute("""
-            INSERT INTO users (
-                user_id, first_name, username, created_at, updated_at,
-                messages_balance, photo_url
-            ) VALUES (?, ?, ?, ?, ?, 0, ?)
-            ON CONFLICT(user_id) DO UPDATE SET
-                username = excluded.username,
-                updated_at = excluded.updated_at,
-                photo_url = excluded.photo_url
-        """, (
-            user_id,
-            first_name,
-            username,
-            datetime.utcnow().isoformat(),
-            datetime.utcnow().isoformat(),
-            photo_url
-        ))
-        conn.commit()
-    finally:
-        conn.close()
+async def _get_user_row(user_id: int) -> Optional[Dict[str, Any]]:
+    async with AsyncSessionLocal() as session:
+        stmt = select(
+            User.user_id,
+            User.username,
+            User.first_name,
+            User.created_at,
+            User.updated_at,
+            User.messages_balance,
+            User.is_banned,
+            User.photo_url,
+        ).where(User.user_id == user_id)
 
-
-def _get_user_row(user_id: int) -> Optional[Dict[str, Any]]:
-    conn = _get_connection()
-    try:
-        cur = conn.cursor()
-        # ✅ УБРАН # КОММЕНТАРИЙ ИЗ SQL! Используй -- для SQL-комментариев
-        cur.execute("""
-            SELECT user_id, username, first_name, created_at, updated_at,
-                   messages_balance, is_banned, photo_url
-            FROM users WHERE user_id = ?
-        """, (user_id,))
-        row = cur.fetchone()
+        result = await session.execute(stmt)
+        row = result.mappings().first()
         return dict(row) if row else None
-    finally:
-        conn.close()
 
 
-def get_user_profile(user_id: int) -> Optional[Dict[str, Any]]:
-    user = _get_user_row(user_id)
+async def get_user_profile(user_id: int) -> Optional[Dict[str, Any]]:
+    user = await _get_user_row(user_id)
     if user is None:
         return None
-    
+
     created_at = user.get("created_at") or datetime.utcnow().isoformat()
 
-    # Подсчитываем друзей
-    conn = _get_connection()
-    try:
-        cur = conn.cursor()
-        cur.execute("SELECT COUNT(*) AS cnt FROM users WHERE referrer_id = ?", (user_id,))
-        friends_invited = int(cur.fetchone()["cnt"] or 0)
-        
-        cur.execute("SELECT COUNT(*) AS cnt FROM history WHERE user_id = ?", (user_id,))
-        requests_total = int(cur.fetchone()["cnt"] or 0)
-        
-        cur.execute("SELECT COUNT(*) AS cnt FROM user_tasks WHERE user_id = ? AND reward_claimed = 1", (user_id,))
-        tasks_completed = int(cur.fetchone()["cnt"] or 0)
-        
-        cur.execute("SELECT xp FROM user_xp WHERE user_id = ?", (user_id,))
-        xp_row = cur.fetchone()
-        xp = int(xp_row["xp"]) if xp_row and xp_row["xp"] is not None else 0
-    finally:
-        conn.close()
+    async with AsyncSessionLocal() as session:
+        # друзья
+        friends_cnt_stmt = (
+            select(func.count())
+            .select_from(User)
+            .where(User.referrer_id == user_id)
+        )
+        friends_invited = (await session.execute(friends_cnt_stmt)).scalar_one() or 0
 
-    # Определяем уровень
+        # запросы
+        requests_cnt_stmt = (
+            select(func.count())
+            .select_from(History)
+            .where(History.user_id == user_id)
+        )
+        requests_total = (await session.execute(requests_cnt_stmt)).scalar_one() or 0
+
+        # выполненные задания
+        tasks_cnt_stmt = (
+            select(func.count())
+            .select_from(UserTask)
+            .where(
+                UserTask.user_id == user_id,
+                UserTask.reward_claimed.is_(True),
+            )
+        )
+        tasks_completed = (await session.execute(tasks_cnt_stmt)).scalar_one() or 0
+
+        # XP
+        xp_stmt = select(UserXP.xp).where(UserXP.user_id == user_id)
+        xp_row = (await session.execute(xp_stmt)).first()
+        xp = int(xp_row[0]) if xp_row and xp_row[0] is not None else 0
+
+    # уровень
     current_level = LEVELS[0]
     for lvl in LEVELS:
         min_xp = lvl["min_xp"]
@@ -92,7 +114,6 @@ def get_user_profile(user_id: int) -> Optional[Dict[str, Any]]:
             current_level = lvl
             break
 
-    # Баланс: используем messages_balance, но возвращаем как credits_balance
     balance = int(user.get("messages_balance") or 0)
 
     return {

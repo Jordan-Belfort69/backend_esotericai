@@ -3,8 +3,8 @@
 from typing import Literal
 
 from fastapi import HTTPException
-from app.services import limits_service, history_service, user_service
 
+from app.services import limits_service, history_service, user_service
 
 ScopeType = Literal["none", "career", "money", "love", "health"]
 
@@ -14,6 +14,7 @@ async def _check_horoscope_limit(user_id: int) -> None:
     Проверяем суточный лимит гороскопов для пользователя.
     Сейчас использует заглушку get_today_limits.
     """
+    # get_today_limits пока синхронная, поэтому без await
     limits = limits_service.get_today_limits(user_id)
     info = limits.get("horoscope") or {"used": 0, "limit": 0}
     used = info.get("used", 0)
@@ -27,7 +28,7 @@ async def _check_horoscope_limit(user_id: int) -> None:
 async def _generate_horoscope_text(zodiac: str, scope: ScopeType) -> str:
     """
     ВРЕМЕННО: заглушка генерации гороскопа.
-    Потом сюда можно перенести реальный вызов OpenAI из v2.
+    Потом сюда можно перенести реальный вызов ИИ.
     """
     scope_map = {
         "none": "на общий день",
@@ -46,14 +47,14 @@ async def _generate_horoscope_text(zodiac: str, scope: ScopeType) -> str:
 async def _save_history_record(user_id: int, zodiac: str, scope: ScopeType, text: str) -> None:
     """
     Записываем запрос гороскопа в history.
-    kind фиксируем как 'horoscope'.
+    type фиксируем как 'horoscope'.
     """
     question = f"Гороскоп: знак={zodiac}, сфера={scope}"
-    history_service.add_history_record(
+    await history_service.log_event(
         user_id=user_id,
-        kind="horoscope",
+        event_type="horoscope",
         question=question,
-        result=text,
+        answer_full=text,
     )
 
 
@@ -65,7 +66,9 @@ async def create_horoscope(user_id: int, zodiac: str, scope: ScopeType) -> str:
     3) запись в history,
     4) возврат текста.
     """
-    await user_service.get_user_or_404(user_id=user_id)
+    user = await user_service.get_user_profile(user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
 
     await _check_horoscope_limit(user_id)
 
@@ -74,6 +77,7 @@ async def create_horoscope(user_id: int, zodiac: str, scope: ScopeType) -> str:
     await _save_history_record(user_id=user_id, zodiac=zodiac, scope=scope, text=text)
 
     return text
+
 
 def create_horoscope_stub(zodiac: str, scope: str) -> str:
     """

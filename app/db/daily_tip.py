@@ -1,133 +1,117 @@
 # app/db/daily_tip.py
 
-import sqlite3
-from pathlib import Path
 from datetime import datetime, timezone as dt_timezone
-from core.config import DB_PATH
+from typing import List, Tuple, Optional
+
+from sqlalchemy import select, insert
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+from app.db.postgres import AsyncSessionLocal
+from app.db.models import DailyTipSettings, AdviceSentLog, User
 
 
-def get_conn() -> sqlite3.Connection:
-    return sqlite3.connect(DB_PATH)
-
-
-def init_daily_tip_table() -> None:
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS daily_tip_settings (
-            user_id INTEGER PRIMARY KEY,
-            enabled INTEGER NOT NULL,
-            time_from TEXT,
-            time_to TEXT,
-            timezone TEXT,
-            updated_at TEXT NOT NULL
-        )
-        """
-    )
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS advice_sent_log (
-            user_id INTEGER NOT NULL,
-            sent_date TEXT NOT NULL,
-            PRIMARY KEY (user_id, sent_date)
-        )
-        """
-    )
-    conn.commit()
-    conn.close()
-
-
-def was_advice_sent_today(user_id: int, date_str: str) -> bool:
+async def was_advice_sent_today(user_id: int, date_str: str) -> bool:
     """Проверяет, отправляли ли уже совет дня этому пользователю в эту дату."""
-    conn = get_conn()
-    try:
-        cur = conn.cursor()
-        cur.execute(
-            "SELECT 1 FROM advice_sent_log WHERE user_id = ? AND sent_date = ?",
-            (user_id, date_str),
+    async with AsyncSessionLocal() as session:
+        stmt = (
+            select(AdviceSentLog)
+            .where(
+                AdviceSentLog.user_id == user_id,
+                AdviceSentLog.sent_date == date_str,
+            )
         )
-        return cur.fetchone() is not None
-    finally:
-        conn.close()
+        result = await session.scalars(stmt)
+        return result.first() is not None
 
 
-def mark_advice_sent(user_id: int, date_str: str) -> None:
+async def mark_advice_sent(user_id: int, date_str: str) -> None:
     """Отмечает, что совет дня отправлен пользователю в эту дату."""
-    conn = get_conn()
-    try:
-        cur = conn.cursor()
-        cur.execute(
-            "INSERT OR IGNORE INTO advice_sent_log (user_id, sent_date) VALUES (?, ?)",
-            (user_id, date_str),
+    async with AsyncSessionLocal() as session:
+        # UPSERT по (user_id, sent_date)
+        stmt = pg_insert(AdviceSentLog).values(
+            user_id=user_id,
+            sent_date=date_str,
+        ).on_conflict_do_nothing(
+            index_elements=[AdviceSentLog.user_id, AdviceSentLog.sent_date]
         )
-        conn.commit()
-    finally:
-        conn.close()
+        await session.execute(stmt)
+        await session.commit()
 
 
-def get_users_enabled_for_advice() -> list[tuple[int, str, str | None, str | None, str | None]]:
-    """Возвращает (user_id, first_name, time_from, time_to, timezone) для всех с включённым советом дня."""
-    conn = get_conn()
-    conn.row_factory = sqlite3.Row
-    try:
-        cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT s.user_id, COALESCE(u.first_name, 'Друг') AS first_name,
-                   s.time_from, s.time_to, s.timezone
-            FROM daily_tip_settings s
-            LEFT JOIN users u ON u.user_id = s.user_id
-            WHERE s.enabled = 1
-            """
+async def get_users_enabled_for_advice() -> List[Tuple[int, str, Optional[str], Optional[str], Optional[str]]]:
+    """
+    Возвращает (user_id, first_name, time_from, time_to, timezone)
+    для всех с включённым советом дня.
+    """
+    async with AsyncSessionLocal() as session:
+        stmt = (
+            select(
+                DailyTipSettings.user_id,
+                User.first_name,
+                DailyTipSettings.time_from,
+                DailyTipSettings.time_to,
+                DailyTipSettings.timezone,
+            )
+            .join(User, User.user_id == DailyTipSettings.user_id, isouter=True)
+            .where(DailyTipSettings.enabled.is_(True))
         )
-        return [
-            (row["user_id"], row["first_name"], row["time_from"], row["time_to"], row["timezone"])
-            for row in cur.fetchall()
-        ]
-    finally:
-        conn.close()
+        result = await session.execute(stmt)
+        rows = result.all()
+
+    res: List[Tuple[int, str, Optional[str], Optional[str], Optional[str]]] = []
+    for user_id, first_name, time_from, time_to, timezone in rows:
+        res.append(
+            (
+                user_id,
+                first_name or "Друг",
+                time_from,
+                time_to,
+                timezone,
+            )
+        )
+    return res
 
 
-def upsert_daily_tip_settings_db(
+async def upsert_daily_tip_settings_db(
     user_id: int,
     enabled: bool,
-    time_from: str | None,
-    time_to: str | None,
-    tz: str | None,
+    time_from: Optional[str],
+    time_to: Optional[str],
+    tz: Optional[str],
 ) -> dict:
-    conn = get_conn()
-    cur = conn.cursor()
-    now = datetime.now(dt_timezone.utc).isoformat()
+    async with AsyncSessionLocal() as session:
+        now = datetime.now(dt_timezone.utc).isoformat()
 
-    cur.execute(
-        """
-        INSERT INTO daily_tip_settings (user_id, enabled, time_from, time_to, timezone, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-        ON CONFLICT(user_id) DO UPDATE SET
-            enabled = excluded.enabled,
-            time_from = excluded.time_from,
-            time_to = excluded.time_to,
-            timezone = excluded.timezone,
-            updated_at = excluded.updated_at
-        """,
-        (user_id, int(enabled), time_from, time_to, tz, now),
-    )
-    conn.commit()
+        stmt = pg_insert(DailyTipSettings).values(
+            user_id=user_id,
+            enabled=enabled,
+            time_from=time_from,
+            time_to=time_to,
+            timezone=tz,
+            updated_at=now,
+        ).on_conflict_do_update(
+            index_elements=[DailyTipSettings.user_id],
+            set_={
+                "enabled": enabled,
+                "time_from": time_from,
+                "time_to": time_to,
+                "timezone": tz,
+                "updated_at": now,
+            },
+        )
 
-    cur.execute(
-        "SELECT user_id, enabled, time_from, time_to, timezone, updated_at "
-        "FROM daily_tip_settings WHERE user_id = ?",
-        (user_id,),
-    )
-    row = cur.fetchone()
-    conn.close()
+        await session.execute(stmt)
+        await session.commit()
+
+        sel = select(DailyTipSettings).where(DailyTipSettings.user_id == user_id)
+        result = await session.scalars(sel)
+        row = result.first()
 
     return {
-        "user_id": row[0],
-        "enabled": bool(row[1]),
-        "time_from": row[2],
-        "time_to": row[3],
-        "timezone": row[4],
-        "updated_at": row[5],
+        "user_id": row.user_id,
+        "enabled": bool(row.enabled),
+        "time_from": row.time_from,
+        "time_to": row.time_to,
+        "timezone": row.timezone,
+        "updated_at": row.updated_at,
     }
