@@ -1,7 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, HTTPException, status
 from app.deps.current_user import CurrentUserDep
 from app.services.user_service import get_user_profile
-
 
 router = APIRouter(prefix="/api")
 
@@ -13,7 +12,7 @@ async def get_me(
     """
     Возвращает профиль пользователя с полным статусом.
     """
-    profile = get_user_profile(user_id)
+    profile = await get_user_profile(user_id)
     if profile is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
