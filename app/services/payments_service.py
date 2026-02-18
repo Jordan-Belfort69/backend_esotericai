@@ -6,6 +6,7 @@ from datetime import datetime, timezone as dt_timezone
 from app.services.sms_service import preview_sms_purchase
 from app.services.user_service import ensure_user_exists
 from app.services.credits_service import add
+from app.services.tasks_service import increment_task_progress
 from app.db.postgres import AsyncSessionLocal
 from app.db.models import SmsPurchase
 from sqlalchemy import select
@@ -93,9 +94,24 @@ async def mark_paid(payment_id: int) -> None:
         if not purchase:
             return
 
-        await add(purchase.user_id, purchase.messages_count)
+        user_id = purchase.user_id
+        messages = purchase.messages_count
 
+        # 1) Начислить купленные сообщения
+        await add(user_id, messages)
+
+        # 2) Пометить платёж как оплаченный
         purchase.status = "paid"
         purchase.paid_at = datetime.now(dt_timezone.utc).isoformat()
-
         await session.commit()
+
+    # 3) Двинуть задачи по покупкам
+    # Первая покупка — просто факт
+    await increment_task_progress(user_id, "BUY_0", delta=1)
+
+    # Остальные считают суммарное количество купленных сообщений
+    await increment_task_progress(user_id, "BUY_1", delta=messages)
+    await increment_task_progress(user_id, "BUY_2", delta=messages)
+    await increment_task_progress(user_id, "BUY_3", delta=messages)
+    await increment_task_progress(user_id, "BUY_4", delta=messages)
+    await increment_task_progress(user_id, "BUY_5", delta=messages)
