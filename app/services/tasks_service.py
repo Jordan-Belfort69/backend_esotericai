@@ -7,6 +7,7 @@ from sqlalchemy import select, update
 from app.services.user_balance_service import (
     change_messages_balance,
     add_user_xp,
+    get_user_xp,
 )
 from app.services.promocodes_service import assign_promocode
 from app.services.promo_pool_service import get_promo_from_pool
@@ -331,6 +332,61 @@ async def ensure_task_record(user_id: int, task_code: str) -> None:
             await session.commit()
 
 
+async def sync_level_tasks_with_xp(user_id: int) -> None:
+    """
+    Синхронизирует LEVEL_UP_* задачи с текущим XP пользователя.
+    Вызывается после выдачи награды по любой задаче.
+    """
+    current_xp = await get_user_xp(user_id)
+
+    level_tasks = [
+        "LEVEL_UP_1",
+        "LEVEL_UP_2",
+        "LEVEL_UP_3",
+        "LEVEL_UP_4",
+        "LEVEL_UP_5",
+        "LEVEL_UP_6",
+    ]
+
+    for code in level_tasks:
+        cfg = TASK_CONFIG.get(code)
+        if not cfg:
+            continue
+
+        threshold = cfg["progress_target"]
+
+        await ensure_task_record(user_id, code)
+
+        async with AsyncSessionLocal() as session:
+            stmt = (
+                update(UserTask)
+                .where(
+                    UserTask.user_id == user_id,
+                    UserTask.task_code == code,
+                )
+                .values(
+                    progress_current=current_xp,
+                    progress_target=threshold,
+                )
+                .returning(
+                    UserTask.progress_current,
+                    UserTask.progress_target,
+                    UserTask.reward_claimed,
+                )
+            )
+            res = await session.execute(stmt)
+            row = res.first()
+            await session.commit()
+
+        if not row:
+            continue
+
+        progress_current, progress_target, reward_claimed = row
+
+        if (not reward_claimed) and progress_current >= progress_target:
+            await _apply_task_reward(user_id, code)
+
+
 async def _apply_task_reward(user_id: int, task_code: str) -> None:
     """Начисляет награды по задаче и помечает её как полученную."""
     rewards = TASK_REWARDS.get(task_code, [])
@@ -366,6 +422,9 @@ async def _apply_task_reward(user_id: int, task_code: str) -> None:
         )
         await session.execute(stmt)
         await session.commit()
+
+    # после выдачи награды обновляем LEVEL_UP_* с учётом нового XP
+    await sync_level_tasks_with_xp(user_id)
 
 
 async def increment_task_progress(user_id: int, task_code: str, delta: int = 1) -> None:
