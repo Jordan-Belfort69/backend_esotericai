@@ -10,7 +10,7 @@ from app.services.tasks_service import increment_task_progress
 
 
 # === НАСТРОЙКА: замени на имя твоего бота ===
-BOT_USERNAME = "ai_esoterictestbot"  # ← Уже правильно!
+BOT_USERNAME = "test_projectesicbot"  # ← Уже правильно!
 
 
 def generate_ref_code() -> str:
