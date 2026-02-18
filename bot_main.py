@@ -20,6 +20,7 @@ from aiogram.types import (
 )
 
 from core.config import BOT_TOKEN
+from app.services.referrals_service import apply_referral_code  # ← ДОБАВИТЬ ЭТУ СТРОКУ
 
 logging.basicConfig(level=logging.INFO)
 
@@ -70,7 +71,17 @@ async def on_start(message: Message, command: CommandObject):
     arg = (command.args or "").strip()
     print("on_start:", user_id, "arg:", repr(arg))
 
-    # Гороскоп: из веб-аппа переход по ссылке t.me/БОТ?start=horoscope_знак_сфера
+    # 1. Пытаемся применить реферальный код (если это он)
+    #    Сюда попадают аргументы, которые не начинаются с наших служебных префиксов.
+    if arg and not arg.startswith("horoscope_") and not arg.startswith("tarot_"):
+        try:
+            ref_applied = await apply_referral_code(user_id, arg)
+            if ref_applied:
+                print(f"Referral applied: {ref_applied} -> {user_id}")
+        except Exception as e:
+            logging.exception("Apply referral error: %s", e)
+
+    # 2. Гороскоп: из веб-аппа переход по ссылке t.me/БОТ?start=horoscope_знак_сфера
     if arg.startswith("horoscope_"):
         rest = arg[len("horoscope_"):].strip()
         parts = rest.split("_", 1)
@@ -86,7 +97,7 @@ async def on_start(message: Message, command: CommandObject):
         else:
             await message.answer("Не удалось определить знак зодиака.")
         return
-
+    
     if arg == "tarot_text":
         user_states[user_id] = {
             "mode": "tarot_text",

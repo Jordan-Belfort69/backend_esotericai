@@ -1,11 +1,13 @@
 # app/services/referrals_service.py
 
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 from sqlalchemy import select
 
 from app.db.postgres import AsyncSessionLocal
 from app.db.models import User
+from app.services.tasks_service import increment_task_progress
+
 
 # === НАСТРОЙКА: замени на имя твоего бота ===
 BOT_USERNAME = "ai_esoterictestbot"  # ← Уже правильно!
@@ -68,3 +70,47 @@ async def get_referrals_info(user_id: int) -> Dict[str, Any]:
         "referral_link": referral_link,
         "friends": friends,
     }
+
+
+async def apply_referral_code(current_user_id: int, ref_code: str) -> Optional[int]:
+    """
+    Применяет реферальный код к текущему пользователю.
+    Возвращает referrer_id, если успешно, иначе None.
+    """
+    if not ref_code:
+        return None
+
+    async with AsyncSessionLocal() as session:
+        # находим реферера по коду
+        stmt = select(User).where(User.ref_code == ref_code)
+        result = await session.scalars(stmt)
+        referrer = result.first()
+        if not referrer:
+            return None
+
+        # нельзя быть рефералом самому у себя
+        if referrer.user_id == current_user_id:
+            return None
+
+        # находим текущего пользователя
+        stmt2 = select(User).where(User.user_id == current_user_id)
+        result2 = await session.scalars(stmt2)
+        user = result2.first()
+        if not user:
+            return None
+
+        # уже есть реферер — ничего не делаем
+        if user.referrer_id:
+            return None
+
+        user.referrer_id = referrer.user_id
+        await session.commit()
+
+    # после успешной привязки — двигаем задания реферера
+    await increment_task_progress(referrer.user_id, "REF_1")
+    await increment_task_progress(referrer.user_id, "REF_2")
+    await increment_task_progress(referrer.user_id, "REF_3")
+    await increment_task_progress(referrer.user_id, "REF_4")
+    await increment_task_progress(referrer.user_id, "REF_5")
+
+    return referrer.user_id
