@@ -31,9 +31,9 @@ user_states: Dict[int, Dict[str, Any]] = {}
 
 
 async def call_tarot_api(user_id: int, spread_type: str, question: str) -> str:
-    """Вызывает твой /api/tarot и возвращает текст расклада."""
+    """Вызывает твой /api/tarot-bot и возвращает текст расклада."""
     async with aiohttp.ClientSession() as session:
-        url = f"{API_BASE}/tarot?user_id={user_id}"
+        url = f"{API_BASE}/tarot-bot?user_id={user_id}"  # было /tarot
         payload = {
             "spread_type": spread_type,
             "question": question,
