@@ -19,9 +19,10 @@ from aiogram.types import (
     FSInputFile,
 )
 
-from core.config import BOT_TOKEN, GROUP_ID  # ← ИСПРАВЛЕНО: добавлен GROUP_ID
+from core.config import BOT_TOKEN, GROUP_ID  # ← добавлен GROUP_ID
 from app.services.referrals_service import apply_referral_code
-from app.services.tasks_service import increment_task_progress  # ← ДОБАВЛЕНО
+from app.services.tasks_service import increment_task_progress
+from app.services.subscription_service import is_task_completed  # ← НОВЫЙ ИМПОРТ
 
 logging.basicConfig(level=logging.INFO)
 
@@ -96,7 +97,7 @@ async def on_start(message: Message, command: CommandObject):
         else:
             await message.answer("Не удалось определить знак зодиака.")
         return
-    
+
     if arg == "tarot_text":
         user_states[user_id] = {
             "mode": "tarot_text",
@@ -299,7 +300,9 @@ async def on_group_message(message: Message):
     if message.chat.id == GROUP_ID and message.from_user and message.text:
         user_id = message.from_user.id
         try:
-            await increment_task_progress(user_id, "D_2", delta=1)
+            # Не инкрементируем прогресс, если задача уже выполнена
+            if not await is_task_completed(user_id, "D_2"):
+                await increment_task_progress(user_id, "D_2", delta=1)
         except Exception as e:
             logging.exception("D_2 task progress error: %s", e)
 
