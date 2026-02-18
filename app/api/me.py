@@ -1,7 +1,13 @@
+# app/api/me.py
+
+import logging
+
 from fastapi import APIRouter, HTTPException, status
 from app.deps.current_user import CurrentUserDep
 from app.services.user_service import get_user_profile
-from app.services.tasks_service import increment_task_progress  # NEW
+from app.services.tasks_service import increment_task_progress
+from app.services.subscription_service import check_and_complete_subscriptions
+from bot_main import bot
 
 router = APIRouter(prefix="/api")
 
@@ -12,13 +18,18 @@ async def get_me(
 ):
     """
     Возвращает профиль пользователя с полным статусом.
+    При каждом запуске мини-аппа автоматически проверяет подписки.
     """
-    # считаем вход в приложение (ежедневный вход)
+    # Проверка подписок (D_1, D_2)
+    try:
+        await check_and_complete_subscriptions(bot, user_id)
+    except Exception as e:
+        logging.exception("Failed to check subscriptions in /api/me: %s", e)
+
+    # Ежедневный вход (D_DAILY)
     try:
         await increment_task_progress(user_id, "D_DAILY")
     except Exception as e:
-        # не ломаем /me, если что-то пошло не так
-        import logging
         logging.exception("Failed to increment D_DAILY in /api/me: %s", e)
 
     profile = await get_user_profile(user_id)

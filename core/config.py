@@ -1,3 +1,5 @@
+# config.py
+
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -9,6 +11,12 @@ BOT_TOKEN = "8320610566:AAE1RlYeD7bpLaWaoZ9ZilVurR8JxsuJ7kM"
 IMG_DIR = BASE_DIR / "img"
 CARDS_IMG_DIR = IMG_DIR / "cards"
 ADVICE_POST_IMAGE = IMG_DIR / "advice" / "post.png"
+
+# ========== ДОБАВЬ ЭТИ СТРОКИ ==========
+# Подписки для заданий D_1 и D_2
+CHANNEL_ID = "@news_esotericai"  # канал с новостями
+GROUP_ID = -1003679972336         # группа с отзывами
+# =======================================
 
 LEVELS = [
     {"code": "spark", "title": "Искра", "min_xp": 0, "max_xp": 99},

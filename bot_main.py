@@ -19,22 +19,25 @@ from aiogram.types import (
     FSInputFile,
 )
 
-from core.config import BOT_TOKEN
-from app.services.referrals_service import apply_referral_code  # ← ДОБАВИТЬ ЭТУ СТРОКУ
+from core.config import BOT_TOKEN, GROUP_ID  # ← ИСПРАВЛЕНО: добавлен GROUP_ID
+from app.services.referrals_service import apply_referral_code
+from app.services.tasks_service import increment_task_progress  # ← ДОБАВЛЕНО
 
 logging.basicConfig(level=logging.INFO)
 
 API_BASE = "https://web-production-4d81b.up.railway.app/api"
-APP_URL = "https://web-production-4d81b.up.railway.app"  # URL фронта
+APP_URL = "https://web-production-4d81b.up.railway.app"
 
-# простое «хранилище состояния» в памяти: user_id -> mode/params
 user_states: Dict[int, Dict[str, Any]] = {}
+
+# Создаём глобальный инстанс бота
+bot = Bot(token=BOT_TOKEN)
 
 
 async def call_tarot_api(user_id: int, spread_type: str, question: str) -> str:
     """Вызывает твой /api/tarot-bot и возвращает текст расклада."""
     async with aiohttp.ClientSession() as session:
-        url = f"{API_BASE}/tarot-bot?user_id={user_id}"  # было /tarot
+        url = f"{API_BASE}/tarot-bot?user_id={user_id}"
         payload = {
             "spread_type": spread_type,
             "question": question,
@@ -65,14 +68,11 @@ async def call_horoscope_api(user_id: int, zodiac: str, scope: str) -> str:
 
 # ========== ХЭНДЛЕРЫ ==========
 
-
 async def on_start(message: Message, command: CommandObject):
     user_id = message.from_user.id
     arg = (command.args or "").strip()
     print("on_start:", user_id, "arg:", repr(arg))
 
-    # 1. Пытаемся применить реферальный код (если это он)
-    #    Сюда попадают аргументы, которые не начинаются с наших служебных префиксов.
     if arg and not arg.startswith("horoscope_") and not arg.startswith("tarot_"):
         try:
             ref_applied = await apply_referral_code(user_id, arg)
@@ -81,7 +81,6 @@ async def on_start(message: Message, command: CommandObject):
         except Exception as e:
             logging.exception("Apply referral error: %s", e)
 
-    # 2. Гороскоп: из веб-аппа переход по ссылке t.me/БОТ?start=horoscope_знак_сфера
     if arg.startswith("horoscope_"):
         rest = arg[len("horoscope_"):].strip()
         parts = rest.split("_", 1)
@@ -160,8 +159,6 @@ async def on_text(message: Message):
     state = user_states.get(user_id)
     print("on_text:", user_id, repr(message.text), "state:", state)
 
-    # Временная команда для отладки:
-    # если сообщение начинается с "tarot ", делаем расклад на одну карту
     if message.text and message.text.startswith("tarot "):
         question = message.text[len("tarot "):].strip()
         text = await call_tarot_api(user_id, "one_card", question)
@@ -169,11 +166,10 @@ async def on_text(message: Message):
         return
 
     if not state:
-        return  # обычный текст, не про Таро
+        return
 
     mode = state.get("mode")
 
-    # 1) Текстовый вопрос после выбора режима через start=tarot_text
     if mode == "tarot_text":
         question = message.text.strip()
         spread_type = "one_card" if state.get("cards") == 1 else "three_cards"
@@ -181,7 +177,6 @@ async def on_text(message: Message):
         await message.answer(text)
         user_states.pop(user_id, None)
 
-    # 3) Таро со своими картами — текст вопроса после фото
     elif mode == "tarot_own_photo" and state.get("photo_file_id"):
         question = message.text.strip()
         text = await call_tarot_api(user_id, "three_cards", question)
@@ -224,13 +219,9 @@ async def on_photo(message: Message):
     )
 
 
-# Формат данных из Mini App (кнопка "Прочитать гороскоп" → отправка в чат):
-# { "type": "horoscope", "zodiac": "Овен" | "Телец" | ..., "scope": "none" | "career" | "money" | "love" | "health" }
-
-
 async def on_web_app_data(message: Message):
     """Обработка данных из Mini App (гороскоп): знак + сфера → чат, бот присылает гороскоп."""
-    print("WEB_APP_DATA RAW:", message.web_app_data)  # для отладки
+    print("WEB_APP_DATA RAW:", message.web_app_data)
 
     if not message.web_app_data or not message.web_app_data.data:
         return
@@ -264,8 +255,7 @@ async def on_web_app_data(message: Message):
             pass
 
 
-# ========== СОВЕТ ДНЯ: ОБРАБОТКА НАЖАТИЯ КНОПОК 1/2/3 ==========
-
+# ========== СОВЕТ ДНЯ ==========
 
 def _get_daily_advice_cards():
     try:
@@ -295,51 +285,47 @@ async def on_advice_callback(callback: CallbackQuery):
         )
         return
 
-    # Сначала картинка отдельным сообщением
     photo = FSInputFile(card_path)
     await callback.message.answer_photo(photo=photo, caption=card["title"])
 
-    # Затем текст отдельным сообщением
     text = f"Уважаемый(ая) {first_name},\n\n{card['description']}"
     await callback.message.answer(text)
 
 
-# ========== ЛОГ ВСЕХ СООБЩЕНИЙ ==========
+# ========== HANDLER ДЛЯ ГРУППЫ ==========
+
+async def on_group_message(message: Message):
+    """Отслеживает сообщения в группе отзывов для задания D_2"""
+    if message.chat.id == GROUP_ID and message.from_user and message.text:
+        user_id = message.from_user.id
+        try:
+            await increment_task_progress(user_id, "D_2", delta=1)
+        except Exception as e:
+            logging.exception("D_2 task progress error: %s", e)
 
 
 async def log_any_message(message: Message):
     print("ANY MESSAGE:", message)
 
 
-# ========== ЗАПУСК БОТА (ИСПОЛЬЗУЕТСЯ ИЗ run_api.py) ==========
-
+# ========== ЗАПУСК БОТА ==========
 
 async def main():
-    bot = Bot(
-        token=BOT_TOKEN,
-        # без allowed_updates, чтобы бот получал web_app_data
-    )
     dp = Dispatcher()
 
-    # порядок регистрации важен: сначала специфичные хэндлеры
     dp.message.register(on_start, CommandStart())
     dp.message.register(on_app, Command("app"))
+    dp.message.register(on_group_message, F.chat.type.in_({"group", "supergroup"}))
     dp.message.register(on_voice, F.voice)
     dp.message.register(on_photo, F.photo)
     dp.message.register(on_text, F.text)
     dp.message.register(on_web_app_data, F.web_app_data)
 
-    # Совет дня: инлайн‑кнопки 1, 2, 3
     dp.callback_query.register(on_advice_callback, F.data.startswith("advice_"))
 
-    # Лог всего остального
     dp.message.register(log_any_message, F())
 
     await dp.start_polling(bot)
-
-
-# ВАЖНО: больше НЕ запускаем бота напрямую.
-# Его будет стартовать run_api.py через эту функцию.
 
 
 async def start_bot():
