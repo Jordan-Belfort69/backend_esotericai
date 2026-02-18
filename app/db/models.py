@@ -37,6 +37,11 @@ class User(Base):
     messages_balance: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     photo_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
+    # НОВОЕ: поля для стрика активности (D_3 / D_4 / D_5)
+    # Храним дату в формате 'YYYY-MM-DD' по МСК
+    last_active_date: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    streak_days: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
     histories: Mapped[list["History"]] = relationship(back_populates="user")
     xp: Mapped[Optional["UserXP"]] = relationship(back_populates="user", uselist=False)
     tasks: Mapped[list["UserTask"]] = relationship(back_populates="user")

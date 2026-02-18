@@ -469,6 +469,48 @@ async def increment_task_progress(user_id: int, task_code: str, delta: int = 1) 
         await _apply_task_reward(user_id, task_code)
 
 
+async def set_task_progress(user_id: int, task_code: str, value: int) -> None:
+    """
+    Жёстко устанавливает progress_current для задачи (без инкремента).
+    Используется для стриков активности D_3/D_4/D_5.
+    """
+    if task_code not in TASK_CONFIG:
+        return
+
+    await ensure_task_record(user_id, task_code)
+
+    async with AsyncSessionLocal() as session:
+        target = TASK_CONFIG[task_code]["progress_target"]
+
+        stmt = (
+            update(UserTask)
+            .where(
+                UserTask.user_id == user_id,
+                UserTask.task_code == task_code,
+            )
+            .values(
+                progress_current=value,
+                progress_target=target,
+            )
+            .returning(
+                UserTask.progress_current,
+                UserTask.progress_target,
+                UserTask.reward_claimed,
+            )
+        )
+        res = await session.execute(stmt)
+        row = res.first()
+        await session.commit()
+
+    if not row:
+        return
+
+    progress_current, progress_target, reward_claimed = row
+
+    if (not reward_claimed) and progress_current >= progress_target:
+        await _apply_task_reward(user_id, task_code)
+
+
 async def get_tasks_by_category(user_id: int, category: str) -> List[Dict[str, Any]]:
     """Возвращает задачи категории в формате фронта."""
     tasks: List[Dict[str, Any]] = []

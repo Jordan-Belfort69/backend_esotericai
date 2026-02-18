@@ -22,7 +22,8 @@ from aiogram.types import (
 from core.config import BOT_TOKEN, GROUP_ID  # ← добавлен GROUP_ID
 from app.services.referrals_service import apply_referral_code
 from app.services.tasks_service import increment_task_progress
-from app.services.subscription_service import is_task_completed  # ← НОВЫЙ ИМПОРТ
+from app.services.subscription_service import is_task_completed
+from app.services.activity_service import register_daily_activity  # ← НОВЫЙ ИМПОРТ
 
 logging.basicConfig(level=logging.INFO)
 
@@ -68,6 +69,7 @@ async def call_horoscope_api(user_id: int, zodiac: str, scope: str) -> str:
 
 
 # ========== ХЭНДЛЕРЫ ==========
+
 
 async def on_start(message: Message, command: CommandObject):
     user_id = message.from_user.id
@@ -160,6 +162,13 @@ async def on_text(message: Message):
     state = user_states.get(user_id)
     print("on_text:", user_id, repr(message.text), "state:", state)
 
+    # Любое текстовое сообщение, кроме /start, считаем активностью (для D_3/D_4/D_5)
+    if message.text and not message.text.startswith("/start"):
+        try:
+            await register_daily_activity(user_id)
+        except Exception as e:
+            logging.exception("register_daily_activity error (text): %s", e)
+
     if message.text and message.text.startswith("tarot "):
         question = message.text[len("tarot "):].strip()
         text = await call_tarot_api(user_id, "one_card", question)
@@ -192,6 +201,12 @@ async def on_voice(message: Message):
     state = user_states.get(user_id)
     print("on_voice:", user_id, "state:", state)
 
+    # Голосовое сообщение тоже считаем активностью
+    try:
+        await register_daily_activity(user_id)
+    except Exception as e:
+        logging.exception("register_daily_activity error (voice): %s", e)
+
     if not state or state.get("mode") != "tarot_voice":
         return
 
@@ -208,6 +223,12 @@ async def on_photo(message: Message):
     state = user_states.get(user_id)
     print("on_photo:", user_id, "state:", state)
 
+    # Фото тоже считается активностью
+    try:
+        await register_daily_activity(user_id)
+    except Exception as e:
+        logging.exception("register_daily_activity error (photo): %s", e)
+
     if not state or state.get("mode") != "tarot_own_photo":
         return
 
@@ -223,6 +244,12 @@ async def on_photo(message: Message):
 async def on_web_app_data(message: Message):
     """Обработка данных из Mini App (гороскоп): знак + сфера → чат, бот присылает гороскоп."""
     print("WEB_APP_DATA RAW:", message.web_app_data)
+
+    # Данные из мини‑аппы считаем активностью
+    try:
+        await register_daily_activity(message.from_user.id)
+    except Exception as e:
+        logging.exception("register_daily_activity error (web_app_data): %s", e)
 
     if not message.web_app_data or not message.web_app_data.data:
         return
@@ -257,6 +284,7 @@ async def on_web_app_data(message: Message):
 
 
 # ========== СОВЕТ ДНЯ ==========
+
 
 def _get_daily_advice_cards():
     try:
@@ -295,6 +323,7 @@ async def on_advice_callback(callback: CallbackQuery):
 
 # ========== HANDLER ДЛЯ ГРУППЫ ==========
 
+
 async def on_group_message(message: Message):
     """Отслеживает сообщения в группе отзывов для задания D_2"""
     if message.chat.id == GROUP_ID and message.from_user and message.text:
@@ -312,6 +341,7 @@ async def log_any_message(message: Message):
 
 
 # ========== ЗАПУСК БОТА ==========
+
 
 async def main():
     dp = Dispatcher()
