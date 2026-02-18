@@ -99,14 +99,17 @@ async def apply_referral_code(current_user_id: int, ref_code: str) -> Optional[i
         if not user:
             return None
 
-        # уже есть реферер — ничего не делаем
-        if user.referrer_id:
+        # уже есть реферер:
+        #  - если это другой человек -> выходим
+        #  - если тот же самый -> referrer_id не меняем, но задачи засчитываем
+        if user.referrer_id and user.referrer_id != referrer.user_id:
             return None
 
-        user.referrer_id = referrer.user_id
-        await session.commit()
+        if not user.referrer_id:
+            user.referrer_id = referrer.user_id
+            await session.commit()
 
-    # после успешной привязки — двигаем задания реферера
+    # после успешной (или уже существующей) привязки — двигаем задания реферера
     await increment_task_progress(referrer.user_id, "REF_1")
     await increment_task_progress(referrer.user_id, "REF_2")
     await increment_task_progress(referrer.user_id, "REF_3")
