@@ -14,6 +14,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     Float,
+    BigInteger,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -23,11 +24,11 @@ from .postgres import Base
 class User(Base):
     __tablename__ = "users"
 
-    user_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     username: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     first_name: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     referrer_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("users.user_id"), nullable=True
+        BigInteger, ForeignKey("users.user_id"), nullable=True
     )
     ref_code: Mapped[Optional[str]] = mapped_column(String, unique=True)
     created_at: Mapped[str] = mapped_column(String, nullable=False)
@@ -57,7 +58,7 @@ class DailyTipSettings(Base):
     __tablename__ = "daily_tip_settings"
 
     user_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("users.user_id"), primary_key=True
+        BigInteger, ForeignKey("users.user_id"), primary_key=True
     )
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False)
     time_from: Mapped[Optional[str]] = mapped_column(String, nullable=True)
@@ -72,7 +73,7 @@ class AdviceSentLog(Base):
     __tablename__ = "advice_sent_log"
 
     user_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("users.user_id"), primary_key=True
+        BigInteger, ForeignKey("users.user_id"), primary_key=True
     )
     sent_date: Mapped[str] = mapped_column(String, primary_key=True)
 
@@ -82,7 +83,7 @@ class History(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("users.user_id"), nullable=False
+        BigInteger, ForeignKey("users.user_id"), nullable=False
     )
     type: Mapped[str] = mapped_column(String, nullable=False)
     question: Mapped[Optional[str]] = mapped_column(Text)
@@ -122,7 +123,7 @@ class ReferralLink(Base):
     __tablename__ = "referral_links"
 
     user_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("users.user_id"), primary_key=True
+        BigInteger, ForeignKey("users.user_id"), primary_key=True
     )
     referral_code: Mapped[str] = mapped_column(String, unique=True, nullable=False)
     url: Mapped[str] = mapped_column(Text, nullable=False)
@@ -133,10 +134,10 @@ class Referral(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     referrer_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("users.user_id"), nullable=False
+        BigInteger, ForeignKey("users.user_id"), nullable=False
     )
     friend_user_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("users.user_id"), nullable=False
+        BigInteger, ForeignKey("users.user_id"), nullable=False
     )
     friend_display_name: Mapped[Optional[str]] = mapped_column(String)
     joined_at: Mapped[str] = mapped_column(String, nullable=False)
@@ -157,7 +158,7 @@ class SmsPurchase(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("users.user_id"), nullable=False
+        BigInteger, ForeignKey("users.user_id"), nullable=False
     )
     messages_count: Mapped[int] = mapped_column(Integer, nullable=False)
     base_price_rub: Mapped[float] = mapped_column(Float, nullable=False)
@@ -175,7 +176,7 @@ class UserPromocode(Base):
     __tablename__ = "user_promocodes"
 
     user_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("users.user_id"), primary_key=True
+        BigInteger, ForeignKey("users.user_id"), primary_key=True
     )
     code: Mapped[str] = mapped_column(
         String, ForeignKey("promo_codes.code"), primary_key=True
@@ -193,7 +194,7 @@ class UserTask(Base):
     __tablename__ = "user_tasks"
 
     user_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("users.user_id"), primary_key=True
+        BigInteger, ForeignKey("users.user_id"), primary_key=True
     )
     task_code: Mapped[str] = mapped_column(String, primary_key=True)
     status: Mapped[str] = mapped_column(String, default="pending")
@@ -209,7 +210,7 @@ class UserXP(Base):
     __tablename__ = "user_xp"
 
     user_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("users.user_id"), primary_key=True
+        BigInteger, ForeignKey("users.user_id"), primary_key=True
     )
     xp: Mapped[int] = mapped_column(Integer, default=0)
 
